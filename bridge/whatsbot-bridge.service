@@ -1,0 +1,19 @@
+# whatsbot-bridge user service — auto-start the bridge on login.
+# Install: mkdir -p ~/.config/systemd/user &&
+#   sed "s|%h|$HOME|g" whatsbot-bridge.service > ~/.config/systemd/user/whatsbot-bridge.service &&
+#   systemctl --user daemon-reload && systemctl --user enable --now whatsbot-bridge
+[Unit]
+Description=WhatsBot local bridge (opencode/codex/claude/agy runner)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node %h/whatsappbot/bridge/bridge.mjs
+Restart=on-failure
+RestartSec=5
+# Hardening: no new privileges, private /tmp
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

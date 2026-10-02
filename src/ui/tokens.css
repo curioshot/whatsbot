@@ -1,0 +1,46 @@
+/* WhatsBot design tokens — minimal black/white, light + dark. Radius 20–30px per spec. */
+:root {
+  --r-sm: 20px;
+  --r-md: 24px;
+  --r-lg: 28px;
+  --r-pill: 30px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.16);
+  --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f5f5f5;
+  --surface-2: #ebebeb;
+  --border: #e2e2e2;
+  --text: #0a0a0a;
+  --text-2: #6f6f6f;
+  --accent: #0a0a0a;
+  --accent-text: #ffffff;
+  --accent-soft: #e8e8e8;
+  --ok: #16a34a;
+  --warn: #b45309;
+  --err: #dc2626;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --surface: #161616;
+  --surface-2: #222222;
+  --border: #2b2b2b;
+  --text: #fafafa;
+  --text-2: #a3a3a3;
+  --accent: #fafafa;
+  --accent-text: #0a0a0a;
+  --accent-soft: #2c2c2c;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #f87171;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) { color-scheme: light; --bg: #ffffff; --surface: #f5f5f5; --surface-2: #ebebeb; --border: #e2e2e2; --text: #0a0a0a; --text-2: #6f6f6f; --accent: #0a0a0a; --accent-text: #ffffff; --accent-soft: #e8e8e8; --ok: #16a34a; --warn: #b45309; --err: #dc2626; }
+}

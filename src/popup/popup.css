@@ -1,0 +1,24 @@
+/* Popup shell: floating stacked cards, radii 20–30px. */
+body { width: 372px; padding: 12px; }
+.wrap { display: flex; flex-direction: column; gap: 10px; }
+.topbar.float, .card.float { box-shadow: var(--shadow-float); }
+.enablebar .t { font-weight: 700; }
+.tabs { border-radius: var(--r-lg); }
+.prov {
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  padding: 12px; margin-top: 8px; background: var(--bg);
+}
+.prov h4 { margin: 0 0 4px; font-size: 13px; }
+#devAgents .agentrow { border-radius: var(--r-sm); }
+#modelCount { margin-top: 8px; }
+.mrow { margin: 6px 0; }
+#capsBox { margin-top: 8px; }
+.cap {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  padding: 5px 11px; font-size: 12px; font-weight: 650; background: var(--bg);
+}
+.cap.on { border-color: var(--ok); }
+.cap.on .icon { color: var(--ok); }
+.cap.off { opacity: 0.75; }
+.cap.off .icon { color: var(--text-2); }

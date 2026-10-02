@@ -1,0 +1,10 @@
+{
+  "name": "whatsbot-bridge",
+  "version": "0.1.0",
+  "description": "Localhost bridge: lets WhatsBot Chrome extension spawn opencode / codex / claude / antigravity headless runs.",
+  "type": "module",
+  "scripts": {
+    "start": "node bridge.mjs"
+  },
+  "engines": { "node": ">=18" }
+}

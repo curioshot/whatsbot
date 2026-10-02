@@ -1,0 +1,223 @@
+/* WhatsBot floating dock — minimal black/white, light/dark, radii 20–30px. */
+#whatsbot-dock {
+  --wb-bg: #0a0a0a; --wb-surface: #161616; --wb-surface-2: #222; --wb-border: #2b2b2b;
+  --wb-text: #fafafa; --wb-text-2: #a3a3a3; --wb-accent: #fafafa; --wb-accent-text: #0a0a0a;
+  --wb-ok: #4ade80; --wb-warn: #fbbf24; --wb-err: #f87171;
+  position: fixed; right: 20px; bottom: 96px; z-index: 2147483000;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px; color: var(--wb-text);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+#whatsbot-dock[data-theme="light"] {
+  --wb-bg: #fff; --wb-surface: #f5f5f5; --wb-surface-2: #ebebeb; --wb-border: #e2e2e2;
+  --wb-text: #0a0a0a; --wb-text-2: #6f6f6f; --wb-accent: #0a0a0a; --wb-accent-text: #fff;
+  --wb-ok: #16a34a; --wb-warn: #b45309; --wb-err: #dc2626;
+}
+#whatsbot-dock .wb-icon { width: 16px; height: 16px; flex: none; }
+#wb-fab {
+  width: 56px; height: 56px; border-radius: 30px;
+  background: var(--wb-accent); color: var(--wb-accent-text);
+  border: 1px solid var(--wb-border); cursor: pointer;
+  display: grid; place-items: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+#wb-fab:hover { opacity: 0.9; }
+#wb-fab .wb-icon { width: 24px; height: 24px; }
+#wb-fab .wb-ring {
+  position: absolute; right: 4px; bottom: 4px; width: 12px; height: 12px;
+  border-radius: 50%; background: #888; border: 2px solid var(--wb-bg);
+}
+#wb-fab .wb-ring.ok { background: var(--wb-ok); }
+#wb-fab .wb-ring.warn { background: var(--wb-warn); }
+#wb-fab .wb-ring.err { background: var(--wb-err); }
+#whatsbot-panel {
+  width: 288px; background: var(--wb-surface); color: var(--wb-text);
+  border: 1px solid var(--wb-border); border-radius: 28px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+#whatsbot-panel[hidden] { display: none; }
+#whatsbot-dock .wb-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px 8px; font-weight: 700; cursor: grab; user-select: none;
+}
+#whatsbot-dock .wb-head:active { cursor: grabbing; }
+#whatsbot-dock .wb-mark {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--wb-accent); color: var(--wb-accent-text);
+  display: grid; place-items: center;
+}
+#whatsbot-dock .wb-dot { width: 8px; height: 8px; border-radius: 50%; background: #888; display: inline-block; margin-left: auto; }
+#whatsbot-dock .wb-ver { font-size: 10px; font-weight: 600; color: var(--wb-text-2); }
+#whatsbot-dock .wb-dot.ok { background: var(--wb-ok); }
+#whatsbot-dock .wb-dot.warn { background: var(--wb-warn); }
+#whatsbot-dock .wb-dot.err { background: var(--wb-err); }
+#whatsbot-dock .wb-hide {
+  border: 1px solid var(--wb-border); background: var(--wb-bg); color: var(--wb-text);
+  width: 26px; height: 26px; border-radius: 30px; cursor: pointer;
+  display: grid; place-items: center;
+}
+#whatsbot-dock .wb-status {
+  margin: 0 14px 10px; padding: 10px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  color: var(--wb-text-2); min-height: 20px; word-break: break-word; font-size: 12px;
+}
+#whatsbot-dock .wb-row { display: flex; gap: 8px; padding: 0 14px 14px; }
+#whatsbot-dock .wb-think {
+  display: flex; align-items: center; gap: 8px; width: calc(100% - 28px);
+  margin: 0 14px 10px; padding: 9px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  color: var(--wb-text); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+}
+#whatsbot-dock .wb-think[hidden] { display: none; }
+#whatsbot-dock .wb-spinner {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  border: 2px solid var(--wb-border); border-top-color: var(--wb-text);
+  animation: wb-spin 0.8s linear infinite;
+}
+@keyframes wb-spin { to { transform: rotate(360deg); } }
+#whatsbot-dock .wb-think.done .wb-spinner { animation: none; border-color: var(--wb-ok); }
+#whatsbot-dock #wb-elapsed { margin-left: auto; color: var(--wb-text-2); font-weight: 600; }
+#whatsbot-dock .wb-detail {
+  margin: 0 14px 10px; padding: 10px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  font-size: 12px; max-height: 260px; overflow: auto;
+}
+#whatsbot-dock .wb-detail[hidden] { display: none; }
+#whatsbot-dock .wb-dsec { color: var(--wb-text-2); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin: 8px 0 4px; }
+#whatsbot-dock .wb-dsec:first-child { margin-top: 0; }
+#whatsbot-dock .wb-quote {
+  border-left: 3px solid var(--wb-accent); padding: 4px 0 4px 8px;
+  color: var(--wb-text); white-space: pre-wrap; word-break: break-word;
+}
+#whatsbot-dock .wb-quote .wb-qwho { color: var(--wb-text-2); font-weight: 700; }
+#whatsbot-dock .wb-step { display: flex; align-items: center; gap: 8px; padding: 2px 0; color: var(--wb-text-2); }
+#whatsbot-dock .wb-step .st-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wb-border); flex: none; }
+#whatsbot-dock .wb-step.doing { color: var(--wb-text); }
+#whatsbot-dock .wb-step.doing .st-dot { background: var(--wb-warn); animation: wb-blink 1s ease-in-out infinite; }
+#whatsbot-dock .wb-step.done { color: var(--wb-text); }
+#whatsbot-dock .wb-step.done .st-dot { background: var(--wb-ok); }
+#whatsbot-dock .wb-step.fail .st-dot { background: var(--wb-err); }
+@keyframes wb-blink { 50% { opacity: 0.35; } }
+#whatsbot-dock .wb-brain, #whatsbot-dock .wb-sent {
+  color: var(--wb-text); white-space: pre-wrap; word-break: break-word;
+}
+#whatsbot-dock .wb-brain.warn { color: var(--wb-warn); font-weight: 700; }
+#whatsbot-dock .wb-mono { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; }
+#whatsbot-dock .wb-bots-toggle {
+  display: flex; align-items: center; gap: 8px; width: calc(100% - 28px);
+  margin: 0 14px 10px; padding: 9px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  color: var(--wb-text); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+}
+#whatsbot-dock .wb-bots-toggle .wb-chev { margin-left: auto; transition: transform 0.15s; }
+#whatsbot-dock .wb-bots-toggle.open .wb-chev { transform: rotate(90deg); }
+#whatsbot-dock .wb-subsec {
+  margin: 0 14px 10px; padding: 10px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  font-size: 12px;
+}
+#whatsbot-dock .wb-subsec[hidden] { display: none; }
+#whatsbot-dock .wb-subrow { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+#whatsbot-dock .wb-subrow input, #whatsbot-dock .wb-subrow textarea {
+  flex: 1; min-width: 0; background: var(--wb-surface); color: var(--wb-text);
+  border: 1px solid var(--wb-border); border-radius: 20px;
+  padding: 8px 10px; font: inherit; font-size: 12px; outline: none; resize: vertical;
+}
+#whatsbot-dock .wb-subrow input:focus, #whatsbot-dock .wb-subrow textarea:focus { border-color: var(--wb-text); }
+#whatsbot-dock .wb-mini {
+  border: 1px solid var(--wb-border); background: var(--wb-surface); color: var(--wb-text);
+  border-radius: 30px; padding: 6px 10px; font: inherit; font-size: 11.5px; font-weight: 650;
+  cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+}
+#whatsbot-dock .wb-mini:hover { background: var(--wb-surface-2); }
+#whatsbot-dock .wb-mini.primary { background: var(--wb-accent); color: var(--wb-accent-text); border-color: var(--wb-accent); }
+#whatsbot-dock .wb-botcard {
+  border: 1px solid var(--wb-border); border-radius: 20px;
+  padding: 8px 10px; margin-top: 6px; background: var(--wb-surface);
+}
+#whatsbot-dock .wb-botcard .wb-bottop { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+#whatsbot-dock .wb-botcard .wb-botsub { color: var(--wb-text-2); font-size: 11px; margin-top: 2px; word-break: break-word; }
+#whatsbot-dock .wb-botcard .wb-botbtns { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+#whatsbot-dock .wb-confirm { border-style: dashed; }
+#wb-fab .wb-count {
+  position: absolute; left: -4px; top: -4px; min-width: 20px; height: 20px;
+  border-radius: 30px; background: var(--wb-accent); color: var(--wb-accent-text);
+  font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px;
+}
+#wb-fab .wb-count[hidden] { display: none; }
+#whatsbot-dock .wb-panic {
+  border: 1px solid var(--wb-border); background: var(--wb-bg); color: var(--wb-text);
+  width: 26px; height: 26px; border-radius: 30px; cursor: pointer;
+  display: grid; place-items: center;
+}
+#whatsbot-dock .wb-panic:hover { border-color: var(--wb-err); color: var(--wb-err); }
+#whatsbot-dock .wb-onboard {
+  margin: 0 14px 10px; padding: 10px 12px;
+  background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
+  font-size: 12px;
+}
+#whatsbot-dock .wb-onboard[hidden] { display: none; }
+#whatsbot-dock .wb-onboard .wb-step { padding: 3px 0; }
+#whatsbot-dock .wb-taskrow { display: flex; gap: 6px; padding: 0 14px 14px; }
+#whatsbot-dock .wb-taskrow input {
+  flex: 1; min-width: 0; background: var(--wb-bg); color: var(--wb-text);
+  border: 1px solid var(--wb-border); border-radius: 20px;
+  padding: 9px 12px; font: inherit; font-size: 12px; outline: none;
+}
+#whatsbot-dock .wb-taskrow input:focus { border-color: var(--wb-text); }
+#whatsbot-dock .wb-go {
+  width: 38px; height: 38px; flex: none; border-radius: 30px; cursor: pointer;
+  background: var(--wb-accent); color: var(--wb-accent-text);
+  border: 1px solid var(--wb-accent); display: grid; place-items: center;
+}
+#whatsbot-dock .wb-go:hover { opacity: 0.88; }
+#wb-fab .wb-ring.warn { animation: wb-blink 1s ease-in-out infinite; }
+#whatsbot-dock .wb-btn {
+  flex: 1; border: 1px solid var(--wb-border);
+  border-radius: 30px; padding: 10px 8px; cursor: pointer;
+  font: inherit; font-weight: 650; font-size: 12.5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--wb-bg); color: var(--wb-text);
+}
+#whatsbot-dock .wb-btn:hover { background: var(--wb-surface-2); }
+#whatsbot-dock .wb-btn.primary { background: var(--wb-accent); color: var(--wb-accent-text); border-color: var(--wb-accent); }
+#whatsbot-dock button:focus-visible, #whatsbot-dock input:focus-visible, #whatsbot-dock textarea:focus-visible,
+.wb-suggest-row button:focus-visible {
+  outline: 2px solid var(--wb-text); outline-offset: 2px;
+}
+
+/* WhatsBot inline suggestions — native-feeling chips under last incoming. */
+.wb-suggest-row {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  margin: 4px 0 4px 8px; padding: 0 8px 0 0;
+  max-width: 100%;
+}
+.wb-sug-chip {
+  border: 1px solid rgba(0, 0, 0, 0.12); background: #fff; color: #111;
+  border-radius: 18px; padding: 6px 12px; font: inherit; font-size: 12.5px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 220px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.wb-sug-chip:hover { background: #f0f2f5; }
+#whatsbot-dock[data-theme="dark"] ~ .wb-suggest-row .wb-sug-chip,
+.wb-suggest-row .wb-sug-chip {
+  /* chips live in WhatsApp's page (not the dock), so carry both modes here */
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  .wb-sug-chip { background: #202c33; color: #e9edef; border-color: rgba(255, 255, 255, 0.14); }
+  .wb-sug-chip:hover { background: #2a3942; }
+  .wb-sug-x { color: #8696a0; border-color: rgba(255, 255, 255, 0.14); background: #202c33; }
+  .wb-sug-x:hover { background: #2a3942; color: #e9edef; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #whatsbot-dock .wb-spinner, #whatsbot-dock .wb-step.doing .st-dot, #wb-fab .wb-ring.warn { animation: none; }
+}
+.wb-sug-x {
+  border: 1px solid rgba(0, 0, 0, 0.12); background: transparent; color: #8696a0;
+  border-radius: 50%; width: 24px; height: 24px; cursor: pointer;
+  display: grid; place-items: center; font-size: 14px; line-height: 1;
+}
+.wb-sug-x:hover { background: rgba(0, 0, 0, 0.06); color: #111; }

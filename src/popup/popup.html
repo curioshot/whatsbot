@@ -1,0 +1,127 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="../ui/components.css">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar float">
+    <div class="brand"><span class="mark"><svg class="icon"><use href="#i-bot"/></svg></span>WhatsBot</div>
+    <span class="pill"><span id="netDot" class="dot"></span><span id="netLabel">Offline</span></span>
+    <button id="themeBtn" class="iconbtn" title="Theme"></button>
+  </header>
+
+  <div class="enablebar card float">
+    <div class="row">
+      <svg class="icon lg"><use href="#i-bolt"/></svg>
+      <div><div class="t">Bot enabled</div><div class="hint" style="margin:0">Replies only in allowed chats</div></div>
+      <label class="switch" style="margin-left:auto"><input type="checkbox" id="enabled"><span class="track"></span></label>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button id="tabModel" class="active"><svg class="icon"><use href="#i-cpu"/></svg>Model</button>
+    <button id="tabDevice"><svg class="icon"><use href="#i-plug"/></svg>Device</button>
+    <button id="tabBots"><svg class="icon"><use href="#i-bot"/></svg>Bots</button>
+    <button id="tabPolicy"><svg class="icon"><use href="#i-sliders"/></svg>Policy</button>
+  </nav>
+
+  <section id="paneModel" class="card float">
+    <h3><svg class="icon"><use href="#i-cpu"/></svg>Cloud provider</h3>
+    <label class="field"><span>Provider</span>
+      <select id="provider">
+        <option value="openai">OpenAI</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="groq">Groq</option>
+        <option value="nvidia">NVIDIA NIM</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="local">Local AI (Ollama / LM Studio)</option>
+      </select>
+    </label>
+    <div id="provFields"></div>
+    <div id="modelCount" class="hint"></div>
+    <div id="capsBox" class="card" style="margin-top:8px">
+      <h3><svg class="icon"><use href="#i-cpu"/></svg>What this model takes</h3>
+      <div id="caps" class="row wrap"></div>
+      <div id="capsNote" class="hint"></div>
+    </div>
+    <div class="row wrap">
+      <button id="fetchModels" class="btn sm"><svg class="icon"><use href="#i-models"/></svg>Models</button>
+      <button id="test" class="btn sm"><svg class="icon"><use href="#i-plug"/></svg>Test</button>
+      <button id="openPanel" class="btn sm"><svg class="icon"><use href="#i-chat"/></svg>Chats</button>
+    </div>
+    <button id="confirmStart" class="btn primary block" style="margin-top:8px"><svg class="icon"><use href="#i-check"/></svg>Confirm model &amp; start bot</button>
+    <div id="status" class="status"></div>
+  </section>
+
+  <section id="paneDevice" class="card float" hidden>
+    <h3><svg class="icon"><use href="#i-plug"/></svg>Device agents <span id="devDot" class="dot"></span></h3>
+    <div class="hint">Run <code>cd bridge && node bridge.mjs</code>, paste token from <code>~/.whatsbot/token</code>.</div>
+    <label class="field"><span>Bridge URL</span><input type="text" id="devUrl" value="http://127.0.0.1:18789"></label>
+    <label class="field"><span>Bridge token</span><input type="password" id="devToken" placeholder="hex token"></label>
+    <label class="field"><span>Trigger prefix</span><input type="text" id="routePrefix" value="/code"></label>
+    <div class="row wrap">
+      <button id="devConnect" class="btn sm primary"><svg class="icon"><use href="#i-plug"/></svg>Connect Device</button>
+      <button id="devTest" class="btn sm"><svg class="icon"><use href="#i-play"/></svg>Test task</button>
+    </div>
+    <div id="devAgents"></div>
+    <div id="devStatus" class="status"></div>
+  </section>
+
+  <section id="paneBots" class="card float" hidden>
+    <h3><svg class="icon"><use href="#i-bot"/></svg>Subbots <span id="botsDot" class="dot"></span></h3>
+    <div class="hint">Subbots live in the WhatsApp dock now — launch and manage them there.</div>
+    <div id="botsMini" class="hint">Loading…</div>
+    <div class="row wrap">
+      <button id="openDock" class="btn sm primary"><svg class="icon"><use href="#i-chat"/></svg>Open WhatsApp dock</button>
+    </div>
+    <div id="subStatus" class="status"></div>
+  </section>
+
+  <section id="panePolicy" class="card float" hidden>
+    <h3><svg class="icon"><use href="#i-sliders"/></svg>Reply policy</h3>
+    <label class="field"><span>Global instruction (all chats)</span>
+      <textarea id="globalInstruction" rows="3" placeholder="Same language as sender. Max 3 lines."></textarea>
+    </label>
+    <div class="grid2">
+      <label class="field"><span>History msgs/reply</span><input type="text" id="historyLimit" inputmode="numeric" placeholder="30"></label>
+      <label class="field"><span>Ctx limit (0=auto)</span><input type="text" id="ctxLimit" inputmode="numeric" placeholder="0"></label>
+    </div>
+    <label class="field"><span>Log retention (days, 0=forever)</span><input type="text" id="logRetention" inputmode="numeric" placeholder="30"></label>
+    <div class="grid2">
+      <label class="field"><span>Suggestions (inline chips)</span>
+        <select id="suggestEnabled">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+        </select>
+      </label>
+      <label class="field"><span>Chips (2-3)</span><input type="text" id="suggestCount" inputmode="numeric" placeholder="3"></label>
+    </div>
+    <div class="hint">History controls prompt size; context limit drives the session meter + auto-rollover. Retention prunes old message logs on bulk saves. Suggestions show under the last incoming message — click inserts, never sends.</div>
+    <div class="hint">Privacy: every AI reply sends that chat's recent text + memory to your selected provider. Suggestions send the same preview text per incoming message. Device tasks run CLIs on your machine, inside the bridge allowlist only.</div>
+    <button id="save" class="btn primary block"><svg class="icon"><use href="#i-save"/></svg>Save all settings</button>
+  </section>
+</div>
+
+<!-- inline sprite (content pages cannot fetch ../ui/icons.svg via <use> reliably) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="5"/><circle cx="9" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/><path d="M12 8V4M8 4h8"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+<symbol id="i-models" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 01-10 0zM12 17v4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5v14l11-7z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="10" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10H9l-5 4z"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 3L5 13h5l-1 8 8-10h-5z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14A8 8 0 0110 4a8 8 0 0010 10z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

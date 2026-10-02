@@ -1,0 +1,25 @@
+# secrets & local state
+.whatsbot/
+**/token
+*.log
+*storage*.json
+*export*.json
+*export*.md
+
+# internal AI workflow docs — never public
+plan.md
+AI_PRE_COMMIT.md
+
+# deps & OS
+node_modules/
+.DS_Store
+Thumbs.db
+*.pem
+.env
+.env.*
+
+# editor / test noise
+.vscode/*
+!.vscode/extensions.json
+coverage/
+dist/

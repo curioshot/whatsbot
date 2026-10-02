@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "WhatsBot \u2014 Multi-LLM WhatsApp Assistant",
+  "version": "0.2.4",
+  "description": "Per-chat AI bot for WhatsApp Web. Multi-provider (OpenAI, Anthropic, OpenRouter, Groq, NVIDIA NIM, Local). Reads, switches, replies with per-chat instructions + context.md.",
+  "minimum_chrome_version": "114",
+  "permissions": [
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "*://web.whatsapp.com/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://openrouter.ai/*",
+    "https://api.groq.com/*",
+    "https://integrate.api.nvidia.com/*",
+    "http://localhost:*/",
+    "http://127.0.0.1:*/"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "WhatsBot settings",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "options_page": "src/sidepanel/sidepanel.html",
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://web.whatsapp.com/*"
+      ],
+      "js": [
+        "src/content/whatsapp-dom.js",
+        "src/content/content.js"
+      ],
+      "css": [
+        "src/content/inject.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": []
+}

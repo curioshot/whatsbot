@@ -1,0 +1,104 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="../ui/components.css">
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar float">
+    <div class="brand"><span class="mark"><svg class="icon"><use href="#i-bot"/></svg></span>WhatsBot Console</div>
+    <span class="pill"><span id="waDot" class="dot"></span><span id="waLabel">WhatsApp: unknown</span></span>
+    <button id="themeBtn" class="iconbtn" title="Theme"></button>
+  </header>
+
+  <nav class="stepnav">
+    <a href="#s1">01 Connect</a><a href="#s2">02 Context</a><a href="#s3">03 Rules</a><a href="#s4">04 Device</a><a href="#s5">05 Logs</a>
+  </nav>
+
+  <section id="s1" class="card float">
+    <h3><svg class="icon"><use href="#i-chat"/></svg>1. WhatsApp tab</h3>
+    <div class="row wrap">
+      <button id="ping" class="btn sm"><svg class="icon"><use href="#i-plug"/></svg>Check connection</button>
+      <button id="list" class="btn sm"><svg class="icon"><use href="#i-refresh"/></svg>List chats</button>
+      <button id="contacts" class="btn sm"><svg class="icon"><use href="#i-contact"/></svg>List contacts</button>
+    </div>
+    <div id="conn" class="status"></div>
+    <div id="chatList" class="chiplist"></div>
+    <div id="contactList" class="chiplist"></div>
+  </section>
+
+  <section id="s2" class="card float">
+    <h3><svg class="icon"><use href="#i-scan"/></svg>2. First run — build context</h3>
+    <div class="hint">Allow chats in step 3 first. Then build per chat (opens it, scrolls step-by-step to top, saves logs, summarizes to context).</div>
+    <div class="row"><input id="buildName" placeholder="Exact chat name"><button id="buildNamed" class="btn sm"><svg class="icon"><use href="#i-scan"/></svg>Build by name</button></div>
+    <div class="row wrap" style="margin-top:8px">
+      <button id="buildHere" class="btn sm"><svg class="icon"><use href="#i-scan"/></svg>Build open chat</button>
+      <button id="buildAll" class="btn sm"><svg class="icon"><use href="#i-bolt"/></svg>Build all allowed</button>
+    </div>
+    <div id="buildStatus" class="status"></div>
+  </section>
+
+  <section id="s3" class="card float">
+    <h3><svg class="icon"><use href="#i-sliders"/></svg>3. Allowlist + per-chat instructions</h3>
+    <div class="hint">Instruction = behaviour for that account (tone, language, boundaries) — <strong>required: AI never replies without one.</strong> Brain = cloud LLM or on-device agent. <span class="mono">/code</span> prefix forces device.</div>
+    <div class="row"><input id="newChat" placeholder="Chat name"><button id="addChat" class="btn sm primary"><svg class="icon"><use href="#i-plus"/></svg>Add</button></div>
+    <div id="rules"></div>
+  </section>
+
+  <section id="s4" class="card float">
+    <h3><svg class="icon"><use href="#i-cpu"/></svg>4. Device agents</h3>
+    <div class="hint">Bridge: <code>cd bridge && node bridge.mjs</code>. Token set in popup. Working dir must be in bridge allowlist.</div>
+    <div class="row">
+      <select id="devAgent"><option>opencode</option><option>codex</option><option>claude</option><option>antigravity</option></select>
+      <input id="devCwd" placeholder="~/projects/app">
+    </div>
+    <div class="row" style="margin-top:8px"><input id="devPrompt" placeholder="Test: reply with DEVICE-OK"><button id="devRun" class="btn sm primary"><svg class="icon"><use href="#i-play"/></svg>Run</button></div>
+    <div id="devOut" class="status"></div>
+  </section>
+
+  <section id="s5" class="card float">
+    <h3><svg class="icon"><use href="#i-models"/></svg>5. Context + logs</h3>
+    <div class="row">
+      <select id="viewChat"></select>
+      <button id="refreshView" class="btn sm"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
+      <button id="newSession" class="btn sm"><svg class="icon"><use href="#i-plus"/></svg>New session</button>
+      <button id="dlCtx" class="btn sm"><svg class="icon"><use href="#i-download"/></svg>MD</button>
+      <button id="dlLogs" class="btn sm"><svg class="icon"><use href="#i-download"/></svg>JSON</button>
+    </div>
+    <div id="sessList"></div>
+    <pre id="viewer" class="viewer"></pre>
+  </section>
+
+  <div class="fabbar">
+    <button id="fabReply" class="btn sm primary"><svg class="icon"><use href="#i-spark"/></svg>AI Reply (open chat)</button>
+    <button id="fabTop" class="iconbtn" title="Back to top"><svg class="icon"><use href="#i-chev"/></svg></button>
+  </div>
+</div>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="5"/><circle cx="9" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/><path d="M12 8V4M8 4h8"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 01-10 0zM12 17v4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5"/></symbol>
+<symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 20H4v-3"/><path d="M4 12h16"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13 3L5 13h5l-1 8 8-10h-5z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="10" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5v14l11-7z"/></symbol>
+<symbol id="i-models" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 20h14"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10H9l-5 4z"/></symbol>
+<symbol id="i-contact" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0114 0"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V6m0 0l-5 5m5-5l5 5"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14A8 8 0 0110 4a8 8 0 0010 10z"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+<script type="module" src="sidepanel.js"></script>
+</body>
+</html>

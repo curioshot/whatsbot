@@ -1,0 +1,71 @@
+{
+  "port": 18789,
+  "cwdAllowlist": [
+    "~/projects",
+    "~/whatsappbot-work",
+    "/tmp"
+  ],
+  "defaultTimeoutMs": 180000,
+  "maxOutputChars": 12000,
+  "agents": {
+    "opencode": {
+      "label": "opencode",
+      "detect": [
+        "opencode",
+        "--version"
+      ],
+      "run": [
+        "opencode",
+        "run",
+        "{prompt}",
+        "--format",
+        "json"
+      ]
+    },
+    "codex": {
+      "label": "Codex CLI",
+      "detect": [
+        "codex",
+        "--version"
+      ],
+      "run": [
+        "codex",
+        "exec",
+        "--json",
+        "--skip-git-repo-check",
+        "{prompt}"
+      ]
+    },
+    "claude": {
+      "label": "Claude Code",
+      "detect": [
+        "claude",
+        "--version"
+      ],
+      "run": [
+        "claude",
+        "-p",
+        "{prompt}",
+        "--output-format",
+        "json"
+      ]
+    },
+    "antigravity": {
+      "label": "Antigravity (agy)",
+      "detect": [
+        "agy",
+        "--version"
+      ],
+      "run": [
+        "agy",
+        "-p",
+        "{prompt}",
+        "--output-format",
+        "json"
+      ],
+      "altBinaries": [
+        "antigravity"
+      ]
+    }
+  }
+}
