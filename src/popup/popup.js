@@ -20,6 +20,10 @@ async function load() {
   const r = await chrome.storage.local.get(['wb_global', 'wb_providers']);
   if (r.wb_global) state.global = { ...DEFAULT_GLOBAL, ...r.wb_global, device: { ...DEFAULT_GLOBAL.device, ...(r.wb_global.device || {}) } };
   if (r.wb_providers) state.providers = { ...defaultProvidersState(), ...r.wb_providers };
+  // Sanitize stored provider: garbage in storage must fall back, never kill
+  // the popup (PROVIDERS[pid] undefined throws in every render path below).
+  if (!PROVIDERS[state.global.activeProvider]) state.global.activeProvider = 'openai';
+  if (!state.providers[state.global.activeProvider]) state.providers = defaultProvidersState();
   $('enabled').checked = !!state.global.enabled;
   $('provider').value = state.global.activeProvider || 'openai';
   $('globalInstruction').value = state.global.globalInstruction || '';
@@ -59,10 +63,16 @@ function renderDevice() {
     : '<div class="hint">Press Connect Device — needs bridge running.</div>';
 }
 
+function safePid() {
+  const pid = $('provider')?.value;
+  return PROVIDERS[pid] ? pid : 'openai';
+}
+
 function renderProvFields() {
-  const pid = $('provider').value;
+  const pid = safePid();
+  if ($('provider')) $('provider').value = pid;
   const def = PROVIDERS[pid];
-  const cfg = state.providers[pid];
+  const cfg = state.providers[pid] || defaultProvidersState()[pid];
   const cached = (cfg.modelsCache && cfg.modelsCache.length ? cfg.modelsCache : FALLBACK_MODELS[pid] || []);
   const cur = cfg.model || def.model;
   const opts = [...new Set([cur, ...cached])].map((m) => `<option value="${esc(m)}" ${m === cur ? 'selected' : ''}>${esc(m)}</option>`).join('');
@@ -93,7 +103,7 @@ function renderProvFields() {
 }
 
 function renderCaps() {
-  const pid = $('provider').value;
+  const pid = safePid();
   const model = (state.providers[pid]?.model || '').trim();
   const caps = modelCaps(pid, model);
   $('caps').innerHTML = CAP_LABELS.map(([k, label]) =>
@@ -104,18 +114,20 @@ function renderCaps() {
   $('capsNote').textContent = `${model || '(no model)'}: ${srcNote}. ${botNote}`;
 }
 
-// tabs
+// tabs (null-safe: a renamed pane id must not kill the whole popup)
 const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
 for (const [btn, pane] of TABS) {
-  $(btn).addEventListener('click', () => {
-    for (const [b] of TABS) $(b).classList.remove('active');
-    for (const [, p] of TABS) $(p).hidden = true;
-    $(btn).classList.add('active');
-    $(pane).hidden = false;
+  const be = $(btn), pe = $(pane);
+  if (!be || !pe) continue;
+  be.addEventListener('click', () => {
+    for (const [b] of TABS) $(b)?.classList.remove('active');
+    for (const [, p] of TABS) { const el = $(p); if (el) el.hidden = true; }
+    be.classList.add('active');
+    pe.hidden = false;
     if (pane === 'paneBots') refreshSubbots();
   });
 }
-$('provider').addEventListener('change', renderProvFields);
+$('provider')?.addEventListener('change', renderProvFields);
 
 $('confirmStart').onclick = async () => {
   try {
@@ -143,7 +155,7 @@ $('confirmStart').onclick = async () => {
     paintNet();
     const caps = modelCaps(pid, cfg.model);
     const media = ['image', 'audio', 'video'].filter((k) => caps[k]).join('/') || 'text-only';
-    setStatus($('status'), `Bot started with ${cfg.model} (${media}). Reply scope: allowed chats only.`, 'ok');
+    setStatus($('status'), `Bot started with ${cfg.model} (${media}). Allowed chats only, text pipeline — media is not read.`, 'ok');
   } catch (e) { setStatus($('status'), 'Failed: ' + e.message, 'err'); }
 };
 $('enabled').addEventListener('change', async () => {

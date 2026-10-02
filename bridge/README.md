@@ -15,9 +15,13 @@ Paste that token into the extension popup → **Connect Device**.
 
 ## Config (`agents.json`)
 
-- `port`, `cwdAllowlist` (tasks can only run inside these dirs), `defaultTimeoutMs`
+- `port`, `cwdAllowlist` (tasks can only run inside these dirs; an empty
+  work dir falls back to the first allowlisted dir that exists),
+  `defaultTimeoutMs` (client timeouts are clamped to 1s–30min)
 - Per-agent `detect` + `run` argv. `{prompt}` and `{cwd}` are substituted; no shell is used.
 - `antigravity.altBinaries: ["antigravity"]` — set `run[0]` to whichever binary you have (`agy` vs `antigravity`).
+- Task logs are written `0600` and pruned after 7 days.
+- Never run with `--no-auth` except for local testing — it disables the token entirely.
 
 ## API (header `X-WhatsBot-Token: <token>`)
 

@@ -31,11 +31,21 @@ async function saveSubbots(subbots) {
       delete subbots[finished.shift()];
     }
     // Absolute backstop: even all-running overflow gets trimmed oldest-first
-    // (with their rules restored) rather than growing without bound.
+    // rather than growing without bound. Live bots are unlinked first so
+    // the chat doesn't stay managed by a deleted watcher forever.
     const stillOver = Object.keys(subbots).length - (MAX_WATCH_BOTS + MAX_SUBBOT_HISTORY);
     if (stillOver > 0) {
       const oldest = ids.sort((a, b) => (subbots[a].createdAt || 0) - (subbots[b].createdAt || 0)).slice(0, stillOver);
-      for (const id of oldest) delete subbots[id];
+      const { chats } = await getStore();
+      let touched = false;
+      for (const id of oldest) {
+        const b = subbots[id];
+        if (b && (b.status === 'running' || b.status === 'paused') && b.targetChatId && chats[b.targetChatId]?.managedBy === id) {
+          try { chats[b.targetChatId] = restoreRule(chats[b.targetChatId], b.prev); touched = true; } catch {}
+        }
+        delete subbots[id];
+      }
+      if (touched) await setStore({ chats });
     }
   }
   await setStore({ subbots });
@@ -72,7 +82,16 @@ async function callLLM(oaMessages, { maxTokens = 1024, temperature = 0.7, jsonMo
   if (def.needsKey && !cfg.apiKey) throw new Error(`Missing API key for ${def.label}. Set it in popup.`);
 
   if (pid === 'anthropic') {
-    const body = toAnthropicBody({ model: cfg.model, oaMessages, maxTokens });
+    // Anthropic has no response_format JSON mode: carry the contract in the
+    // prompt instead, or every JSON reply costs a second call (and long
+    // plain answers trip the strict filter and fail outright).
+    let msgs = oaMessages;
+    if (jsonMode) {
+      msgs = oaMessages.map((m) => ({ ...m }));
+      const last = msgs[msgs.length - 1];
+      if (last) last.content = `${last.content}\n\nRespond with ONLY a JSON object like {"reply": "..."} — no other text.`;
+    }
+    const body = toAnthropicBody({ model: cfg.model, oaMessages: msgs, maxTokens });
     const res = await fetchT(`${cfg.baseUrl.replace(/\/$/, '')}/messages`, {
       method: 'POST',
       headers: {
@@ -226,7 +245,7 @@ async function runDeviceTask({ agent, prompt, cwd, timeoutMs = 180000, chatId, c
   const { global } = await getStore();
   const url = global.device?.url || 'http://127.0.0.1:18789';
   const token = global.device?.token || '';
-  if (!token) throw new Error('Device token missing — paste ~/.whatsbot/token into popup → Connect Device.');
+  if (!token) throw new WbError('NO_DEVICE', 'Device token missing — paste ~/.whatsbot/token into popup → Connect Device.');
   const task = await deviceRunAndWait(url, token, { agent, prompt, cwd, timeoutMs, chatId, chatName }, null);
   if (task.state !== 'done') throw new Error(`${agent}: ${task.error || 'failed'}`);
   // Never send a canned fallback to a chat: empty output is a failure, not a reply.
@@ -260,6 +279,10 @@ async function appendLogs(chatId, entries, sessionId = null) {
   }
   logs[chatId] = applyRetention(arr, global.maxLogPerChat, global.logRetentionDays ?? 30);
   await setStore({ logs });
+  // Hot path must respect the whole-chat trim too (it used to run on bulk
+  // builds only, so steady messaging grew past 60 chats). Throttled: only
+  // when actually over the cap.
+  if (Object.keys(logs).length > MAX_LOGGED_CHATS) await enforceQuota({ global, logs });
   return logs[chatId].length;
 }
 
@@ -403,11 +426,10 @@ async function executeReplyTurn(store, chatId, chatName, { kind, build, run }) {
     const promptChars = typeof payload === 'string' ? payload.length : JSON.stringify(payload).length;
     const usage = estimateUsage({ systemChars: 0, historyChars: promptChars, contextChars: 0, reserveTokens: 600 });
     sess.estTokens = usage;
-    sess.lastActiveAt = Date.now();
-    // NOTE: msgCount increments only on the session that actually runs
-    // (below + roll path) — never on the closed predecessor.
-
+    // Decide rollover BEFORE stamping activity: stamping first makes the
+    // 24h-idle check unreachable (it would always see "just now").
     const decision = decideRollover(sess, limit, false);
+    sess.lastActiveAt = Date.now();
     if ((decision.action === 'roll-full' || decision.action === 'roll-idle') && !rolled) {
       rolled = true;
       const summary = await summarizeSession(store, chatId, sess);
@@ -610,6 +632,19 @@ on('GEN_REPLY', async (msg) => {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
           throw new WbError('NO_INSTRUCTION', `No instruction for "${msg.chatName}". Add one in Console → Rules before AI replies.`);
         }
+        // Allowlist gate: paused/stopped chats and a disabled master switch
+        // refuse here too. Content enforces this for its own auto-fire, but
+        // a direct GEN_REPLY must never bypass pause/off. Running watchers
+        // carry their own permission (they answer even with master off).
+        const gateWatcher = runningWatchFor(store, msg.chatId);
+        if (cfg.allowed === false && !gateWatcher) {
+          await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
+          throw new WbError('DISABLED', `AI replies are off for "${msg.chatName}". Allow the chat in Console → Rules first.`);
+        }
+        if (global.enabled === false && !gateWatcher) {
+          await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
+          throw new WbError('DISABLED', 'The bot is disabled in the popup. Turn it on first.');
+        }
         const lockToken = await acquireTurnLock(msg.chatId);
         if (!lockToken) {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
@@ -665,6 +700,7 @@ on('GEN_REPLY', async (msg) => {
             contextMd: ctxWithSession(summary),
             history: msg.history || [],
             newMessages: msg.newMessages || [],
+            historyLimit: global.historyLimit || 30,
           }),
           run: async (oa) => {
             // JSON contract first; plain retry under strict chat-shape test.
@@ -729,15 +765,18 @@ on('SAVE_CONTEXT_BATCH', async (msg) => {
         c.name = msg.chatName || c.name;
         chats[msg.chatId] = c;
         const arr = logs[msg.chatId] || [];
+        const batchSessionId = getActiveSession({ chats }, msg.chatId)?.id || null;
         for (const m of msg.messages || []) {
           if (!arr.some((x) => x.msgId && x.msgId === m.msgId)) {
-            arr.push({ ts: m.ts || Date.now(), dir: m.dir, sender: m.sender, text: m.text, msgId: m.msgId });
+            arr.push({ ts: m.ts || Date.now(), dir: m.dir, sender: m.sender, text: m.text, msgId: m.msgId, sessionId: batchSessionId });
           }
         }
-        // keep raw logs sorted oldest->newest, cap
+        // keep raw logs sorted oldest->newest, cap. The per-chat cap is the
+        // storage guarantee — a lowered maxLogPerChat must win over the
+        // (usually larger) build scan cap.
         arr.sort((a, b) => (a.ts || 0) - (b.ts || 0));
         const { global } = await getStore();
-        logs[msg.chatId] = arr.slice(-Math.max(global.maxLogPerChat, global.contextBuildCap));
+        logs[msg.chatId] = arr.slice(-(global.maxLogPerChat || 2000));
         await setStore({ chats, logs });
         await enforceQuota({ chats, logs });
         return { total: logs[msg.chatId].length };
@@ -1041,6 +1080,10 @@ on('SUBBOT_LIST', async () => {
           if (!canonical) continue;
           const wantId = resolveChatId(store.chats, canonical, bot.targetKind || 'chat');
           if (!store.chats[wantId] || wantId === bot.targetChatId) continue;
+          // Never clobber a real hand-written rule: if the target already
+          // has an instruction and isn't managed by this bot, leave it alone.
+          const existing = store.chats[wantId];
+          if (existing && String(existing.instruction || '').trim() && existing.managedBy !== bot.id) continue;
           const oldCfg = store.chats[bot.targetChatId];
           if (oldCfg && oldCfg.managedBy === bot.id) {
             store.chats[bot.targetChatId] = restoreRule(oldCfg, bot.prev);

@@ -1,6 +1,13 @@
 import { applyTheme, wireThemeButton, watchSystem } from '../ui/theme.js';
 
 const $ = (id) => document.getElementById(id);
+// Null-safe static wiring: a renamed/missing button id must skip itself,
+// never abort the rest of console init.
+function wire(id, fn) {
+  const el = $(id);
+  if (el) el.onclick = fn;
+  else console.warn(`[console] missing element #${id} — wiring skipped`);
+}
 
 function setStatus(el, msg, kind = '') {
   el.textContent = msg;
@@ -52,16 +59,16 @@ async function mutateChat(id, fn) {
   await setChats(chats);
 }
 
-$('ping').onclick = async () => {
+wire('ping', async () => {
   try {
     const r = await sendToWA('PING');
     const ok = !!r?.loaded;
     setWa(ok, ok ? `WhatsApp: ${r.chat?.chatName || 'loaded'}` : 'WhatsApp: injected, not loaded');
     setStatus($('conn'), ok ? `Connected. Active: ${r.chat?.chatName || '—'}` : 'Extension injected but WA not loaded yet.', ok ? 'ok' : '');
   } catch (e) { setWa(false, 'WhatsApp: unreachable'); setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
-};
+});
 
-$('list').onclick = async () => {
+wire('list', async () => {
   try {
     const r = await sendToWA('LIST_CHATS');
     const div = $('chatList'); div.innerHTML = '';
@@ -80,9 +87,9 @@ $('list').onclick = async () => {
     });
     if (!r.chats?.length) setStatus($('conn'), 'No chats found — is WA loaded?', 'err');
   } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
-};
+});
 
-$('contacts').onclick = async () => {
+wire('contacts', async () => {
   setStatus($('conn'), 'Opening contacts… (watch the WhatsApp tab, it opens and closes the New-chat pane)');
   try {
     const r = await sendToWA('LIST_CONTACTS');
@@ -111,9 +118,9 @@ $('contacts').onclick = async () => {
     }
     setStatus($('conn'), `${(r.contacts || []).length} contacts, ${(r.groups || []).length} groups. Open one, then Add it in step 3 with an instruction (required before AI replies).`, 'ok');
   } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
-};
+});
 
-$('buildHere').onclick = async () => {
+wire('buildHere', async () => {
   await flushPendingSaves();
   setStatus($('buildStatus'), 'Reading full history step-by-step… (watch WA tab scroll)');
   try {
@@ -121,8 +128,8 @@ $('buildHere').onclick = async () => {
     setStatus($('buildStatus'), r?.ok ? `Done. ${r.scanned} msgs to context.` : 'Failed: ' + r?.error, r?.ok ? 'ok' : 'err');
     await renderRules();
   } catch (e) { setStatus($('buildStatus'), 'Failed: ' + e.message, 'err'); }
-};
-$('buildNamed').onclick = async () => {
+});
+wire('buildNamed', async () => {
   await flushPendingSaves();
   const name = $('buildName').value.trim();
   if (!name) return;
@@ -132,8 +139,8 @@ $('buildNamed').onclick = async () => {
     setStatus($('buildStatus'), r?.ok ? `Done. ${r.chatName}: ${r.scanned} msgs.` : 'Failed: ' + r?.error, r?.ok ? 'ok' : 'err');
     await renderRules();
   } catch (e) { setStatus($('buildStatus'), 'Failed: ' + e.message, 'err'); }
-};
-$('buildAll').onclick = async () => {
+});
+wire('buildAll', async () => {
   await flushPendingSaves();
   const { chats } = await getStore();
   const allowed = Object.entries(chats).filter(([, c]) => c.allowed).map(([, c]) => c.name).filter(Boolean);
@@ -146,9 +153,9 @@ $('buildAll').onclick = async () => {
   }
   setStatus($('buildStatus'), 'All done.', 'ok');
   await renderRules();
-};
+});
 
-$('addChat').onclick = async () => {
+wire('addChat', async () => {
   const name = $('newChat').value.trim();
   if (!name) return;
   try {
@@ -177,7 +184,7 @@ $('addChat').onclick = async () => {
     $('newChat').value = '';
     await renderRules();
   } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
-};
+});
 
 const ROUTE_OPTS = ['cloud', 'device:opencode', 'device:codex', 'device:claude', 'device:antigravity'];
 const esc = (s) => String(s || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -342,7 +349,7 @@ async function renderRules() {
   if (!Object.keys(chats).length) wrap.innerHTML = '<div class="hint">No chats yet — List chats, then Add.</div>';
 }
 
-$('refreshView').onclick = async () => {
+wire('refreshView', async () => {
   const id = $('viewChat').value;
   if (!id) { $('viewer').textContent = '(no chat selected)'; return; }
   try {
@@ -367,9 +374,9 @@ $('refreshView').onclick = async () => {
     if (!(r.sessions || []).length) sl.innerHTML = '<div class="hint">No sessions yet — the first AI reply opens one.</div>';
     $('viewer').textContent = `# ${r.chat?.name || chatName} — context\nupdated: ${r.chat?.contextUpdatedAt ? new Date(r.chat.contextUpdatedAt).toLocaleString() : '-'}\n\n${md}\n\n---\n## last 60/${n} logged\n${tail}`;
   } catch (e) { $('viewer').textContent = 'Failed: ' + e.message; }
-};
+});
 
-$('newSession').onclick = async () => {
+wire('newSession', async () => {
   const id = $('viewChat').value;
   if (!id) return;
   try {
@@ -378,7 +385,7 @@ $('newSession').onclick = async () => {
     if (!r?.ok) throw new Error(r?.error || 'failed');
     $('refreshView').click();
   } catch (e) { $('viewer').textContent = 'Failed: ' + e.message; }
-};
+});
 function download(filename, text, mime = 'text/plain') {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -386,24 +393,24 @@ function download(filename, text, mime = 'text/plain') {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
-$('dlCtx').onclick = async () => {
+wire('dlCtx', async () => {
   const id = $('viewChat').value; if (!id) return;
   try {
     const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id });
     if (!r?.ok) throw new Error(r?.error || 'export failed');
     download(`${r.chat?.name || id}-context.md`, r.chat?.contextMd || '');
   } catch (e) { $('viewer').textContent = 'Failed: ' + e.message; }
-};
-$('dlLogs').onclick = async () => {
+});
+wire('dlLogs', async () => {
   const id = $('viewChat').value; if (!id) return;
   try {
     const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id });
     if (!r?.ok) throw new Error(r?.error || 'export failed');
     download(`${r.chat?.name || id}-logs.json`, JSON.stringify(r.logs, null, 2), 'application/json');
   } catch (e) { $('viewer').textContent = 'Failed: ' + e.message; }
-};
+});
 
-$('devRun').onclick = async () => {
+wire('devRun', async () => {
   setStatus($('devOut'), 'Running on device… (up to 3 min)');
   try {
     const r = await chrome.runtime.sendMessage({
@@ -415,11 +422,11 @@ $('devRun').onclick = async () => {
     });
     setStatus($('devOut'), r?.ok ? `Reply:\n${r.reply}` : 'Failed: ' + r?.error, r?.ok ? 'ok' : 'err');
   } catch (e) { setStatus($('devOut'), 'Failed: ' + e.message, 'err'); }
-};
+});
 
-$('fabReply').onclick = async () => {
+wire('fabReply', async () => {
   try { await sendToWA('MANUAL_REPLY'); } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
-};
+});
 $('fabTop').onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
 (async () => {

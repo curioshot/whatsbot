@@ -85,7 +85,7 @@ export const FALLBACK_MODELS = {
 // contextMd is capped so one huge memory cannot blow the context window or
 // the session meter (device path caps at 3000; cloud caps here at 8000).
 export const MAX_CLOUD_CONTEXT_CHARS = 8000;
-export function buildReplyMessages({ globalInstruction, chatInstruction, contextMd, history, newMessages }) {
+export function buildReplyMessages({ globalInstruction, chatInstruction, contextMd, history, newMessages, historyLimit }) {
   const ctxSlice = String(contextMd || '').trim().slice(0, MAX_CLOUD_CONTEXT_CHARS);
   const system = [
     globalInstruction?.trim() ? `Global policy:\n${globalInstruction.trim()}` : '',
@@ -107,8 +107,9 @@ export function buildReplyMessages({ globalInstruction, chatInstruction, context
   // that never sees them cannot misattribute them.
   const usableHist = (history || []).filter((m) => speakerOf(m) !== 'unknown');
   const usableFresh = (newMessages || []).filter((m) => speakerOf(m) !== 'unknown');
+  const keepHist = Number.isFinite(historyLimit) && historyLimit > 0 ? Math.floor(historyLimit) : 30;
 
-  const hist = usableHist.slice(-30).map((m) =>
+  const hist = usableHist.slice(-keepHist).map((m) =>
     speakerOf(m) === 'you'
       ? { role: 'assistant', content: `YOU (you sent this): ${m.text}` }
       : { role: 'user', content: `THEM (they sent this${m.sender && m.sender !== 'Unknown' ? `, display name "${m.sender}"` : ''}): ${m.text}` },

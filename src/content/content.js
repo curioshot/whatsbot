@@ -495,20 +495,27 @@
   async function sendText(text) {
     const composer = window.WADOM.composerEl();
     if (!composer) throw new Error('Message box not found — open a chat first');
+    // Chat the send started in: restoring into another chat after a mid-send
+    // switch would leak the owner's draft across conversations.
+    const startedChat = activeChatKey().chatId;
     // Preserve the owner's in-progress draft: an auto-reply must never eat it.
     const draft = (composer.innerText || '').trim();
     let sent = false;
     const restoreDraft = async () => {
       if (!draft) return;
-      composer.focus();
+      try { if (activeChatKey().chatId !== startedChat) return; } catch {}
+      // Re-query the composer: WA re-renders it, and the closed-over node
+      // may be detached (restore would silently fail — or hit a stale tree).
+      const live = window.WADOM.composerEl() || composer;
+      live.focus();
       if (!sent) {
         // send failed midway: clear partial reply text before restoring draft
-        selectAll(composer);
+        selectAll(live);
         cmdOk('delete', null);
-        try { composer.textContent = ''; } catch {}
+        try { live.textContent = ''; } catch {}
       }
-      typeInto(composer, draft);
-      composer.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      typeInto(live, draft);
+      live.dispatchEvent(new InputEvent('input', { bubbles: true }));
     };
     try {
       composer.focus();
@@ -659,6 +666,9 @@
   }
 
   let lastRefreshAt = 0;
+  // Reentrancy coalescing: mutations fire hundreds/sec and the awaits below
+  // yield — without this, overlapping runs process the same messages twice.
+  let snapBusy = false, snapQueued = false;
   // Seen-set cap: ids accumulate forever in long sessions; drop oldest in
   // bulk (iterator order = insertion order). Clearing wholesale would re-fire
   // old messages as fresh — never do that.
@@ -671,7 +681,7 @@
       seenMsgIds.delete(n.value);
     }
   }
-  async function handleSnapshot(prime = false) {
+  async function handleSnapshotInner(prime = false) {
     // Storage read per DOM mutation is wasteful (WA fires hundreds/sec);
     // rules still apply within ~2s, and onChanged pushes updates live.
     if (Date.now() - lastRefreshAt > 2000) {
@@ -717,6 +727,18 @@
     startThinking(chatName, merged, chatId, true);
   }
 
+  // Single-flight wrapper: a run already in flight coalesces reentrant calls
+  // into exactly one follow-up pass instead of overlapping full runs.
+  async function handleSnapshot(prime = false) {
+    if (snapBusy) { snapQueued = true; return; }
+    snapBusy = true;
+    try { await handleSnapshotInner(prime); }
+    finally {
+      snapBusy = false;
+      if (snapQueued) { snapQueued = false; handleSnapshot().catch(() => {}); }
+    }
+  }
+
   function handleReplyRefusal(chatName, res) {
     // Background refused to generate (e.g. missing instruction): never send,
     // just tell the owner what to do. Returns true if it was a refusal.
@@ -728,6 +750,11 @@
     if (res?.code === 'NO_DEVICE') {
       updateBadge(chatName, 'blocked: connect device first (popup → Device)', 'warn');
       paintResult(`BLOCKED — device run requested but bridge is not connected.\nFix: popup → Device → paste token → Connect Device.\n${res?.error || ''}`);
+      return true;
+    }
+    if (res?.code === 'DISABLED') {
+      updateBadge(chatName, 'bot off — reply skipped (see detail)', 'warn');
+      paintResult(`BLOCKED — ${res?.error || 'replies are disabled for this chat.'}\nFix: Console → Rules → Allow the chat, or enable the bot in the popup.`);
       return true;
     }
     return false;
@@ -1029,6 +1056,10 @@
       if (now0.chatId !== chatId) {
         updateBadge(chatName, 'switching back to target chat…', 'warn');
         await openChatByName(chatName);
+        // Verify the reopen actually landed back — the search fallback can
+        // open a lookalike, and everything below must not run there.
+        const back0 = activeChatKey();
+        if (back0.chatId !== chatId) { updateBadge(chatName, `reopen landed on "${back0.chatName}" — reply skipped, press AI Reply for manual`, 'err'); return; }
         const live2 = readVisibleMessages().slice(-(storeCache.global.historyLimit ?? 30));
         if (live2.length) history = live2;
       } else {
@@ -1057,6 +1088,10 @@
       if (now.chatId !== chatId) {
         updateBadge(chatName, 'switching back to target chat…', 'warn');
         await openChatByName(chatName);
+        // Never type into the wrong conversation: abort if the reopen
+        // landed on a lookalike instead of the target.
+        const back = activeChatKey();
+        if (back.chatId !== chatId) { endThinking(null, 'failed'); paintResult(`ABORTED: reopen landed on "${back.chatName}" — nothing sent.`); updateBadge(chatName, 'wrong chat after reopen — reply aborted', 'err'); return; }
       }
       setThinkStage('sending', 'typing into WhatsApp…');
       await sendText(res.reply);
@@ -1142,7 +1177,7 @@
         const want = plan.chat.trim().toLowerCase();
         const got = (live.chatName || '').trim().toLowerCase();
         const openedName = String(opened || '').trim().toLowerCase();
-        if (got !== want && openedName !== want && !got.includes(want.slice(0, 12))) {
+        if (got !== want && openedName !== want && !got.startsWith(want + ' ')) {
           throw new Error(`opened "${live.chatName}" but you asked for "${plan.chat}" — nothing sent. Use the exact chat name.`);
         }
         await sleep(800);
@@ -1206,6 +1241,10 @@
           await openChatByName(msg.name);
           await sleep(1500);
           const { chatId, chatName } = activeChatKey();
+          // Never build memory for a lookalike the search fallback opened.
+          if (chatName.trim().toLowerCase() !== String(msg.name || '').trim().toLowerCase()) {
+            throw new Error(`opened "${chatName}" but you asked for "${msg.name}" — build aborted. Use the exact chat name.`);
+          }
           const scanned = await scanFullHistory(chatId, chatName, (p) => updateBadge(chatName, `reading ${msg.name}… ${p.scanned}`));
           const fin = await chrome.runtime.sendMessage({ type: 'FINALIZE_CONTEXT', chatId, chatName });
           sendResponse({ ok: true, scanned, chatName, contextMd: fin?.contextMd });

@@ -51,7 +51,14 @@ function expandHome(p) {
 const ALLOW = (cfg.cwdAllowlist || ['~/projects']).map(expandHome).map((p) => path.resolve(p));
 
 function cwdAllowed(cwd) {
-  if (!cwd) return { ok: true, cwd: process.cwd() };
+  if (!cwd) {
+    // Empty work dir must NOT fall back to the bridge's own cwd (that would
+    // run tasks outside the allowlist). Use the first allowlisted dir that
+    // exists instead — still useful, still contained.
+    const fb = ALLOW.find((a) => { try { return fs.statSync(a).isDirectory(); } catch { return false; } });
+    if (!fb) return { ok: false, error: `no working directory: none of the allowlist dirs exist (${ALLOW.join(', ')})` };
+    return { ok: true, cwd: fb };
+  }
   const resolved = path.resolve(expandHome(cwd));
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
     return { ok: false, error: `cwd not found: ${resolved}` };
@@ -226,14 +233,17 @@ async function startTask({ agent, prompt, cwd, timeoutMs }) {
   const argv = (def.run || []).map((a) => a.replaceAll('{prompt}', safePrompt).replaceAll('{cwd}', c.cwd));
   const bin = argv[0];
   const args = argv.slice(1);
-  const child = spawn(bin, args, { cwd: c.cwd, timeout: timeoutMs || cfg.defaultTimeoutMs || 180000 });
+  // Clamp client timeouts: huge values hit setTimeout overflow and hold a
+  // child + poll slot; negatives misbehave. 1s min, 30min max.
+  const ms = Math.min(Math.max(Number(timeoutMs) || cfg.defaultTimeoutMs || 180000, 1000), 30 * 60 * 1000);
+  const child = spawn(bin, args, { cwd: c.cwd, timeout: ms });
   t.proc = child;
-  const log = fs.createWriteStream(logPath);
+  const log = fs.createWriteStream(logPath, { mode: 0o600 });
   log.write(`$ ${bin} ${args.map((a) => (a.length > 200 ? a.slice(0, 200) + '…' : a)).join(' ')}\n[cwd ${c.cwd}]\n\n`);
   let out = '', err = '';
   child.stdout?.on('data', (d) => { out += d; log.write(d); });
   child.stderr?.on('data', (d) => { err += d; log.write(d); });
-  const to = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, timeoutMs || cfg.defaultTimeoutMs || 180000);
+  const to = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, ms);
   child.on('close', (code) => {
     clearTimeout(to);
     // spawn failure already recorded a precise error — a trailing close

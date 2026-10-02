@@ -17,7 +17,7 @@ command box right inside WhatsApp.
 | Memory | Auto-built `context.md` per chat from full history scan |
 | Sessions | Numbered sessions with context meter, auto-rollover at 95% |
 | Providers | OpenAI, Anthropic, OpenRouter, Groq, NVIDIA NIM, local (Ollama/LM Studio) |
-| Suggest chips | 2–3 inline reply drafts under new messages — click inserts, never sends |
+| Suggest chips | 2–3 inline reply drafts under new messages, following the OS light/dark setting — click inserts, never sends |
 | Subbots | Watch bots (reply continuously) and task bots (one-shot jobs), plain words |
 | Device agents | Route a chat to opencode / codex / claude / agy running on your machine |
 | Safety | Strict-JSON replies + no-leak output filter — reasoning can never be sent |
@@ -55,8 +55,10 @@ The toolbar badge shows `ON` while the bot runs.
 
 Each chat gets numbered sessions (`s-…`) with an estimated context meter
 (`12.4k/128k`). At 95% the session auto-rolls with a summarized carry-over.
-On reply errors it opens fresh and retries once. Every log entry carries its
-session id.
+On cloud-reply errors it opens fresh and retries once; device runs are
+single-attempt by design (a blind retry would execute tools twice).
+Reply-turn entries carry their session id; history-build entries carry the
+active session id when one exists.
 
 ## Subbots (WhatsApp dock → Bots section)
 
@@ -66,7 +68,8 @@ a confirmation card shows target + editable instruction first, so they never
 start blind. **Task bots** ("list who chatted me last month") run once and
 park the result in History (re-runnable). Manage with Pause/Resume/Restart/
 Stop/Delete; ⏸ in the dock head pauses every watcher at once. Max 5
-concurrent watch bots.
+concurrent watch bots; watch-bot replies are logged as `bot:<id>`
+(other replies log as `bot` or `device:<agent>`).
 
 ## Device agents (opencode / codex / claude / antigravity)
 
@@ -74,7 +77,8 @@ concurrent watch bots.
    in `bridge/whatsbot-bridge.service` for autostart).
 2. Popup → Bridge URL + token → Connect Device.
 3. Console → per-chat brain (`cloud` or `device:*`) + work dir (must be in the
-   `bridge/agents.json` allowlist). `/code …` forces device on any chat.
+   `bridge/agents.json` allowlist; empty work dir falls back to the first
+   allowlisted dir that exists). `/code …` forces device on any chat.
 
 ## How it fits together
 
