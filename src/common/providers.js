@@ -59,8 +59,12 @@ export const DEFAULT_GLOBAL = {
   ctxLimitOverride: 0, // 0 = auto from model table; set tokens to override session meter
   suggestionsEnabled: false, // global kill-switch for inline chips
   suggestCount: 3, // 2-3 chips per incoming
-  device: { url: 'http://127.0.0.1:18789', token: '', lastSeen: 0, agents: [] },
+  device: { url: 'http://127.0.0.1:18789', token: '', lastSeen: 0, agents: [], defaultAgent: 'opencode', useAsDefault: false },
   routePrefix: '/code',
+  // Last cloud provider picked in the popup. Helper jobs (summaries, chips,
+  // parses) use it when the active provider is 'device' — agents can't do
+  // those. Stashed automatically; you never set it by hand.
+  prevCloudProvider: 'openai',
 };
 
 export function defaultProvidersState() {

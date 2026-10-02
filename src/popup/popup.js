@@ -1,5 +1,6 @@
 import { PROVIDERS, DEFAULT_GLOBAL, defaultProvidersState, FALLBACK_MODELS } from '../common/providers.js';
 import { modelCaps, BOT_USES, CAP_LABELS } from '../common/models.js';
+import { DEVICE_AGENTS } from '../common/device.js';
 import { applyTheme, wireThemeButton, watchSystem } from '../ui/theme.js';
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +23,8 @@ async function load() {
   if (r.wb_providers) state.providers = { ...defaultProvidersState(), ...r.wb_providers };
   // Sanitize stored provider: garbage in storage must fall back, never kill
   // the popup (PROVIDERS[pid] undefined throws in every render path below).
-  if (!PROVIDERS[state.global.activeProvider]) state.global.activeProvider = 'openai';
+  // 'device' is a valid choice (local bridge agent instead of a cloud API).
+  if (state.global.activeProvider !== 'device' && !PROVIDERS[state.global.activeProvider]) state.global.activeProvider = 'openai';
   if (!state.providers[state.global.activeProvider]) state.providers = defaultProvidersState();
   $('enabled').checked = !!state.global.enabled;
   $('provider').value = state.global.activeProvider || 'openai';
@@ -65,12 +67,36 @@ function renderDevice() {
 
 function safePid() {
   const pid = $('provider')?.value;
+  if (pid === 'device') return 'device';
   return PROVIDERS[pid] ? pid : 'openai';
+}
+
+// Device-as-provider panel: pick a local agent instead of a cloud API.
+// Installed bridge agents first, full list as fallback (bridge offline).
+function renderDeviceChoice() {
+  const d = state.global.device || {};
+  const installed = (d.agents || []).filter((a) => a.installed).map((a) => a.id);
+  const names = [...new Set([...installed, ...DEVICE_AGENTS, d.defaultAgent || 'opencode'])];
+  const cur = names.includes(d.defaultAgent) ? d.defaultAgent : names[0];
+  const opts = names.map((m) => `<option value="${esc(m)}" ${m === cur ? 'selected' : ''}>${esc(m)}${installed.includes(m) ? ' (installed)' : ''}</option>`).join('');
+  $('provFields').innerHTML = `
+    <div class="prov"><h4>Device agent (local bridge)</h4>
+    <label class="field"><span>Agent</span>
+      <select id="f-agent">${opts}</select>
+    </label>
+    <label class="field"><span style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-usedef" ${d.useAsDefault ? 'checked' : ''} style="width:auto"> Answer all chats with this agent</span></label>
+    <div class="hint">Chats with an explicit Brain (Console → Rules) keep theirs. Needs the bridge running + token in the Device tab. Summaries and chips still use your last cloud provider.</div>
+    </div>`;
+  $('modelCount').textContent = d.lastSeen ? `bridge seen ${new Date(d.lastSeen).toLocaleString()}` : 'bridge not connected yet — Device tab → Connect Device';
+  $('f-agent').onchange = (e) => { state.global.device = { ...(state.global.device || {}), defaultAgent: e.target.value }; renderCaps(); };
+  $('f-usedef').onchange = (e) => { state.global.device = { ...(state.global.device || {}), useAsDefault: e.target.checked }; };
+  renderCaps();
 }
 
 function renderProvFields() {
   const pid = safePid();
   if ($('provider')) $('provider').value = pid;
+  if (pid === 'device') return renderDeviceChoice();
   const def = PROVIDERS[pid];
   const cfg = state.providers[pid] || defaultProvidersState()[pid];
   const cached = (cfg.modelsCache && cfg.modelsCache.length ? cfg.modelsCache : FALLBACK_MODELS[pid] || []);
@@ -104,6 +130,12 @@ function renderProvFields() {
 
 function renderCaps() {
   const pid = safePid();
+  if (pid === 'device') {
+    const agent = state.global.device?.defaultAgent || 'opencode';
+    $('caps').innerHTML = `<span class="cap on"><svg class="icon"><use href="#i-check"/></svg>agent: ${esc(agent)}</span>`;
+    $('capsNote').textContent = `${agent}: runs tools on your machine via the bridge (work-dir allowlist applies). Bot pipeline: text only.`;
+    return;
+  }
   const model = (state.providers[pid]?.model || '').trim();
   const caps = modelCaps(pid, model);
   $('caps').innerHTML = CAP_LABELS.map(([k, label]) =>
@@ -133,6 +165,22 @@ $('confirmStart').onclick = async () => {
   try {
     await collectAndSave();
     const pid = state.global.activeProvider;
+    if (pid === 'device') {
+      // Same gate as cloud: probe the bridge, enable only on success.
+      const agent = state.global.device?.defaultAgent || 'opencode';
+      setStatus($('status'), `Probing bridge for ${agent}…`);
+      const t = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION' });
+      if (!t?.ok) {
+        setStatus($('status'), `Bridge test failed: ${t?.error} — bot NOT started.`, 'err');
+        return;
+      }
+      state.global.enabled = true;
+      $('enabled').checked = true;
+      await chrome.storage.local.set({ wb_global: state.global });
+      paintNet();
+      setStatus($('status'), `Bot started with device agent ${agent} (${t.reply}). Chats with an explicit Brain keep theirs.`, 'ok');
+      return;
+    }
     const def = PROVIDERS[pid];
     const cfg = state.providers[pid];
     if (def.needsKey && !cfg.apiKey) {
@@ -164,6 +212,19 @@ $('enabled').addEventListener('change', async () => {
       // Same gate as Confirm & Start: never enable on a failing model.
       await collectAndSave();
       const pid = state.global.activeProvider;
+      if (pid === 'device') {
+        setStatus($('status'), 'Probing bridge before enabling…');
+        const t = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION' });
+        if (!t?.ok) {
+          $('enabled').checked = false;
+          state.global.enabled = false;
+          await chrome.storage.local.set({ wb_global: state.global });
+          paintNet();
+          setStatus($('status'), `Bridge test failed: ${t?.error} — bot NOT enabled.`, 'err');
+          return;
+        }
+        setStatus($('status'), `Bot enabled with device agent ${state.global.device?.defaultAgent || 'opencode'}.`, 'ok');
+      } else {
       const def = PROVIDERS[pid];
       const cfg = state.providers[pid];
       if (def.needsKey && !cfg.apiKey) {
@@ -185,6 +246,7 @@ $('enabled').addEventListener('change', async () => {
         return;
       }
       setStatus($('status'), `Bot enabled with ${cfg.model}.`, 'ok');
+      }
     }
     paintNet(); await collectAndSave();
   } catch (e) { setStatus($('status'), 'Failed: ' + e.message, 'err'); }
@@ -193,12 +255,22 @@ $('enabled').addEventListener('change', async () => {
 async function collectAndSave() {
   state.global.enabled = $('enabled').checked;
   state.global.activeProvider = $('provider').value;
+  // Stash the last cloud pick: helper jobs (summaries, chips) use it while
+  // the reply default is a device agent.
+  if (state.global.activeProvider !== 'device' && PROVIDERS[state.global.activeProvider]) {
+    state.global.prevCloudProvider = state.global.activeProvider;
+  }
   state.global.globalInstruction = $('globalInstruction').value;
   state.global.device = {
     ...(state.global.device || {}),
     url: $('devUrl').value.trim() || DEFAULT_GLOBAL.device.url,
     token: $('devToken').value.trim(),
   };
+  // Device-as-provider panel fields (present only when that entry is shown).
+  const fa = $('f-agent');
+  if (fa && fa.value) state.global.device.defaultAgent = fa.value;
+  const fu = $('f-usedef');
+  if (fu) state.global.device.useAsDefault = fu.checked;
   state.global.routePrefix = $('routePrefix').value.trim() || '/code';
   state.global.historyLimit = numOr($('historyLimit').value, DEFAULT_GLOBAL.historyLimit);
   state.global.ctxLimitOverride = numOr($('ctxLimit').value, 0);
@@ -227,18 +299,21 @@ $('save').onclick = async () => {
 $('fetchModels').onclick = async () => {
   await collectAndSave();
   const pid = $('provider').value;
-  setStatus($('status'), `Fetching ${PROVIDERS[pid].label} models…`);
+  const isDev = pid === 'device';
+  setStatus($('status'), `Fetching ${(isDev ? { label: 'device agents' } : PROVIDERS[pid]).label}…`);
   try {
     const r = await chrome.runtime.sendMessage({ type: 'LIST_MODELS', provider: pid });
     if (!r?.ok) throw new Error(r?.error || 'fetch failed');
     const s = await chrome.storage.local.get(['wb_providers']);
     if (s.wb_providers) state.providers = { ...defaultProvidersState(), ...s.wb_providers };
     const list = r.models || [];
-    // Preserve the user's model choice: a sorted live list's first entry is
-    // almost never what they want (e.g. dall-e on OpenAI). Only note it.
+    // Preserve the user's choice: never auto-switch it to a list head.
+    const cur = isDev ? (state.global.device?.defaultAgent || 'opencode') : state.providers[pid].model;
     let note = '';
-    if (list.length && !list.includes(state.providers[pid].model)) {
-      note = ` Current "${state.providers[pid].model}" not in live list — kept. Pick from the dropdown if you want to switch.`;
+    if (list.length && !list.includes(cur)) {
+      note = isDev
+        ? ` Current "${cur}" not installed — kept. Install it or pick from the dropdown.`
+        : ` Current "${cur}" not in live list — kept. Pick from the dropdown if you want to switch.`;
     }
     renderProvFields();
     setStatus($('status'), `${list.length} models (${r.source}).${note}`, 'ok');

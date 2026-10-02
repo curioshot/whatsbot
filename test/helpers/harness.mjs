@@ -116,6 +116,12 @@ await t('AUTO_INSTRUCTION save', { type: 'AUTO_INSTRUCTION', chatId: 'name:tareq
 await t('SUGGEST_REPLIES chips', { type: 'SUGGEST_REPLIES', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'hi', msgId: 'm9' }] }, (r) => r.ok && Array.isArray(r.suggestions) && r.suggestions.length === 3);
 await t('SUGGEST_REPLIES empty', { type: 'SUGGEST_REPLIES', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [] }, (r) => r.ok && r.suggestions.length === 0);
 await t('AUTO_INSTRUCTION keep', { type: 'AUTO_INSTRUCTION', chatId: 'name:tareq', chatName: 'Tareq' }, (r) => r.ok && r.saved === false);
+store.wb_global.device.useAsDefault = true;
+await t('GEN_REPLY device-default no-token', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'hi', msgId: 'm10' }] }, (r) => !r.ok && r.code === 'NO_DEVICE');
+store.wb_global.device.token = 'x';
+await t('GEN_REPLY device-default bridge-down', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'hi', msgId: 'm11' }] }, (r) => !r.ok);
+store.wb_global.device.useAsDefault = false;
+store.wb_global.device.token = '';
 
 let fail = 0;
 for (const [s, n, extra] of results) { console.log(s, '-', n, extra); if (s !== 'PASS') fail++; }

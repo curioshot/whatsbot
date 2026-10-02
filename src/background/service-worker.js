@@ -75,7 +75,9 @@ async function fetchT(url, opts = {}, ms = 90000) {
 
 async function callLLM(oaMessages, { maxTokens = 1024, temperature = 0.7, jsonMode = false } = {}) {
   const { global, providers } = await getMeta();
-  const pid = global.activeProvider;
+  // Helper jobs (summaries, chips, parses) run on a cloud model even when
+  // the reply default is a device agent — agents can't do those.
+  const pid = global.activeProvider === 'device' ? (global.prevCloudProvider || 'openai') : global.activeProvider;
   const def = PROVIDERS[pid];
   const cfg = providers[pid];
   if (!def) throw new Error(`Unknown provider ${pid}`);
@@ -142,6 +144,17 @@ async function callLLM(oaMessages, { maxTokens = 1024, temperature = 0.7, jsonMo
 // ---------- model listing ----------
 // GET <base>/models for each provider type. Returns {models:[ids], source:'live'|'fallback', count}
 async function listModels(pid) {
+  // Device entry lists installed bridge agents instead of cloud models.
+  if (pid === 'device') {
+    const { global } = await getMeta();
+    const url = global.device?.url || 'http://127.0.0.1:18789';
+    const token = global.device?.token || '';
+    if (!token) throw new Error('Connect the bridge first (popup → Device).');
+    const agents = await deviceAgents(url, token);
+    const ids = agents.filter((a) => a.installed).map((a) => a.id);
+    if (!ids.length) throw new Error('Bridge connected, but no agents installed.');
+    return { models: ids, source: 'live (bridge)', count: ids.length };
+  }
   const { providers } = await getMeta();
   const def = PROVIDERS[pid];
   const cfg = providers[pid] || {};
@@ -651,7 +664,16 @@ on('GEN_REPLY', async (msg) => {
           throw new WbError('BUSY', 'Another reply turn is already running for this chat.');
         }
         try {
-        const routed = pickDeviceAgent(cfg, msg.newMessages, global);
+        let routed = pickDeviceAgent(cfg, msg.newMessages, global);
+        // Popup device default: chats without an explicit device brain answer
+        // through the chosen agent. Explicit per-chat device:X still wins
+        // (checked first); a missing token refuses instead of billing cloud.
+        if (!routed && global.device?.useAsDefault) {
+          if (!global.device?.token) {
+            throw new WbError('NO_DEVICE', `Default brain is a device agent but no bridge token is set — popup → Device → Connect Device first. Nothing was sent to the cloud.`);
+          }
+          routed = { agent: global.device.defaultAgent || 'opencode', via: 'global-default' };
+        }
         // Explicit /code with no device token must refuse — never leak code
         // prompts to the cloud provider silently.
         if (!routed && (global.routePrefix || '/code')) {
@@ -803,6 +825,15 @@ on('FINALIZE_CONTEXT', async (msg) => {
 });
 
 on('TEST_CONNECTION', async () => {
+        // Device default: the "connection" is the bridge, not a cloud API.
+        const { global } = await getMeta();
+        if (global.activeProvider === 'device') {
+          const url = global.device?.url || 'http://127.0.0.1:18789';
+          const token = global.device?.token || '';
+          if (!token) throw new WbError('NO_DEVICE', 'No bridge token — popup → Device → Connect Device first.');
+          await deviceHealth(url, token);
+          return { reply: 'DEVICE-OK' };
+        }
         const t = await callLLM([{ role: 'user', content: 'Reply with exactly: OK' }], { maxTokens: 10 });
         return { reply: t };
 });

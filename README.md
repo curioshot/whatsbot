@@ -16,7 +16,7 @@ command box right inside WhatsApp.
 | Per-chat bot | Allowlist + mandatory per-chat instruction — no instruction, no reply, ever |
 | Memory | Auto-built `context.md` per chat from full history scan |
 | Sessions | Numbered sessions with context meter, auto-rollover at 95% |
-| Providers | OpenAI, Anthropic, OpenRouter, Groq, NVIDIA NIM, local (Ollama/LM Studio) |
+| Providers | OpenAI, Anthropic, OpenRouter, Groq, NVIDIA NIM, local (Ollama/LM Studio) — or a device agent, picked in the same popup list |
 | Suggest chips | 2–3 inline reply drafts under new messages, following the OS light/dark setting — click inserts, never sends |
 | Subbots | Watch bots (reply continuously) and task bots (one-shot jobs), plain words |
 | Device agents | Route a chat to opencode / codex / claude / agy running on your machine |
@@ -30,7 +30,9 @@ command box right inside WhatsApp.
 
 # 2. Open web.whatsapp.com, scan QR, hard-reload the tab
 
-# 3. Popup → paste API key → Save → Test
+# 3. Popup → pick a brain: a cloud provider (paste API key → Save → Test)
+#    or "Device agent" (pick opencode/codex/claude/antigravity → tick
+#    "Answer all chats" → Connect Device → Confirm & start)
 
 # 4. Optional: on-device agents
 cd bridge && node bridge.mjs
@@ -75,10 +77,13 @@ concurrent watch bots; watch-bot replies are logged as `bot:<id>`
 
 1. `cd bridge && node bridge.mjs` (token in `~/.whatsbot/token`; systemd unit
    in `bridge/whatsbot-bridge.service` for autostart).
-2. Popup → Bridge URL + token → Connect Device.
+2. Popup → Bridge URL + token → Connect Device. Or skip this tab: popup →
+   Brain list → "Device agent" answers everything through one agent.
 3. Console → per-chat brain (`cloud` or `device:*`) + work dir (must be in the
    `bridge/agents.json` allowlist; empty work dir falls back to the first
    allowlisted dir that exists). `/code …` forces device on any chat.
+   Per-chat `device:*` always wins over the popup default. Summaries, chips,
+   and parses still use your last cloud provider (agents can't do those).
 
 ## How it fits together
 
