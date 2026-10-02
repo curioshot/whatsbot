@@ -1,4 +1,4 @@
-# WhatsBot — Multi-LLM WhatsApp Extension (MV3)
+# WhatsBot — Multi-LLM WhatsApp Extension 
 
 [![version](https://img.shields.io/badge/version-0.2.4-blue)](manifest.json)
 [![tests](https://img.shields.io/badge/tests-62%20passing-green)](test/)
