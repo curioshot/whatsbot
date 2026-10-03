@@ -1267,9 +1267,20 @@
         case 'BUILD_CONTEXT_HERE': {
           const { chatId, chatName } = activeChatKey();
           let scanned = 0;
-          scanned = await scanFullHistory(chatId, chatName, (p) => updateBadge(chatName, `reading history… ${p.scanned}`));
+          startThinking(chatName, [], chatId, false);
+          setThinkStage('generating', 'reading history…');
+          scanned = await scanFullHistory(chatId, chatName, (p) => {
+            updateBadge(chatName, `reading history… ${p.scanned}`);
+            setThinkStage('generating', `reading history… ${p.scanned}`);
+          });
+          setThinkStage('generating', 'summarizing…');
+          updateBadge(chatName, 'summarizing…', 'warn');
           const fin = await chrome.runtime.sendMessage({ type: 'FINALIZE_CONTEXT', chatId, chatName });
           if (!fin?.ok) throw new Error(fin?.error);
+          think.active = false;
+          try { clearInterval(think.timer); } catch {}
+          setThinkStage('sent', `saved ${scanned} msgs`);
+          paintResult(`SAVED context (${scanned} msgs). ${ruleSnapshot(chatId)}`);
           sendResponse({ ok: true, scanned, contextMd: fin.contextMd });
           updateBadge(chatName, `context built (${scanned} msgs)`, 'ok');
           break;
@@ -1282,14 +1293,32 @@
           if (chatName.trim().toLowerCase() !== String(msg.name || '').trim().toLowerCase()) {
             throw new Error(`opened "${chatName}" but you asked for "${msg.name}" — build aborted. Use the exact chat name.`);
           }
-          const scanned = await scanFullHistory(chatId, chatName, (p) => updateBadge(chatName, `reading ${msg.name}… ${p.scanned}`));
+          startThinking(chatName, [], chatId, false);
+          setThinkStage('generating', `reading ${msg.name}…`);
+          const scanned = await scanFullHistory(chatId, chatName, (p) => {
+            updateBadge(chatName, `reading ${msg.name}… ${p.scanned}`);
+            setThinkStage('generating', `reading… ${p.scanned}`);
+          });
+          setThinkStage('generating', 'summarizing…');
+          updateBadge(chatName, 'summarizing…', 'warn');
           const fin = await chrome.runtime.sendMessage({ type: 'FINALIZE_CONTEXT', chatId, chatName });
+          think.active = false;
+          try { clearInterval(think.timer); } catch {}
+          setThinkStage('sent', `saved ${scanned} msgs`);
+          paintResult(`SAVED context (${scanned} msgs). ${ruleSnapshot(chatId)}`);
           sendResponse({ ok: true, scanned, chatName, contextMd: fin?.contextMd });
           break;
         }
         default: sendResponse({ ok: false, code: 'UNKNOWN_TYPE', error: `unknown content type: ${msg?.type}` });
       }
-    })().catch((e) => sendResponse({ ok: false, code: e?.code || 'ERROR', error: String(e.message || e) }));
+    })().catch((e) => {
+      // Never leave the thinking pill spinning on a failed build/send:
+      // park it as failed so seconds stop and state is honest.
+      try {
+        if (think.active && /^(BUILD|SEND|MANUAL)/.test(msg?.type || '')) endThinking(null, 'failed');
+      } catch {}
+      sendResponse({ ok: false, code: e?.code || 'ERROR', error: String(e.message || e) });
+    });
     return true;
   });
 
@@ -1297,14 +1326,30 @@
   async function doBuild() {
     const { chatName } = activeChatKey();
     revealFeedback('reading history…');
-    updateBadge(chatName, 'reading full history step-by-step…', 'warn');
     try {
       const { chatId } = activeChatKey();
-      const scanned = await scanFullHistory(chatId, chatName, (p) => updateBadge(chatName, `reading… ${p.scanned}`, 'warn'));
+      // Run inside the thinking view: elapsed seconds count, stages show,
+      // and the badge can't fall back to idle mid-summarize.
+      startThinking(chatName, [], chatId, false);
+      setThinkStage('generating', 'reading history…');
+      const scanned = await scanFullHistory(chatId, chatName, (p) => {
+        updateBadge(chatName, `reading… ${p.scanned}`, 'warn');
+        setThinkStage('generating', `reading history… ${p.scanned}`);
+      });
+      setThinkStage('generating', 'summarizing…');
+      updateBadge(chatName, 'summarizing…', 'warn');
       const fin = await chrome.runtime.sendMessage({ type: 'FINALIZE_CONTEXT', chatId, chatName });
-      updateBadge(chatName, fin?.ok ? `context saved (${scanned})` : 'summarize failed', fin?.ok ? 'ok' : 'err');
+      if (!fin?.ok) throw new Error(fin?.error || 'summarize failed');
+      updateBadge(chatName, `context saved (${scanned})`, 'ok');
+      think.active = false;
+      try { clearInterval(think.timer); } catch {}
+      setThinkStage('sent', `saved ${scanned} msgs`);
+      paintResult(`SAVED context (${scanned} msgs). ${ruleSnapshot(chatId)}`);
       paintOnboarding();
-    } catch (e) { updateBadge(chatName, 'error: ' + String(e.message || e).slice(0, 80), 'err'); }
+    } catch (e) {
+      endThinking(null, 'build failed: ' + String(e.message || e).slice(0, 80));
+      updateBadge(chatName, 'error: ' + String(e.message || e).slice(0, 80), 'err');
+    }
   }
 
   // ---------- dock subbots section ----------
