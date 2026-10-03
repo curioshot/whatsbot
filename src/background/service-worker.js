@@ -2,7 +2,7 @@ import { PROVIDERS, defaultProvidersState, FALLBACK_MODELS, buildReplyMessages, 
 import { deviceAgents, deviceHealth, deviceRunAndWait, reconcilePendingDeviceTasks, unjournalDevicePending } from '../common/device.js';
 import { limitForModel, estimateUsage, newSession, sessionState, decideRollover, closeSession, pruneSessions, formatCtx } from '../common/sessions.js';
 import { subbotId, chatIdForName, resolveChatId, baseChatId, normalizeName, canonicalNameFor, autoName, bindWatchRule, restoreRule, newSubbot, parseSubbotOffline } from '../common/subbots.js';
-import { getStore, getMeta, setStore, suggestEnabledFor, SKEYS } from '../common/store.js';
+import { getStore, getMeta, setStore, suggestEnabledFor, SKEYS, withStoreLock } from '../common/store.js';
 import { on, dispatch, WbError } from '../common/bus.js';
 
 // Suggestion rate guard (in-memory; content cache is the primary dedupe).
@@ -761,8 +761,25 @@ on('DEVICE_PROBE', async (msg) => {
         return { health, agents };
 });
 
-on('DEVICE_TASK', async (msg) => {
+on('DEVICE_TASK', async (msg, sender) => {
         // msg: {agent, prompt, cwd, timeoutMs, chatId?, chatName?} — manual test / sidepanel send
+        // Bench calls (no chat) are extension-pages-only: a compromised page
+        // must not get free bridge execution. Chat-bound calls pass the same
+        // allow/master gate as GEN_REPLY.
+        if (!msg.chatId && sender?.tab) {
+          throw new WbError('FORBIDDEN', 'Device bench runs from extension pages only.');
+        }
+        if (msg.chatId) {
+          const s = await getMeta();
+          const { cfg } = getChatCfg(s, msg.chatId);
+          if (!cfg.instruction?.trim()) throw new WbError('NO_INSTRUCTION', 'No instruction for this chat.');
+          if (cfg.allowed === false && !runningWatchFor(s, msg.chatId)) {
+            throw new WbError('DISABLED', 'AI replies are off for this chat.');
+          }
+          if (s.global.enabled === false && !runningWatchFor(s, msg.chatId)) {
+            throw new WbError('DISABLED', 'The bot is disabled in the popup.');
+          }
+        }
         const reply = await runDeviceTask({ agent: msg.agent, prompt: msg.prompt, cwd: msg.cwd || '', timeoutMs: msg.timeoutMs || 180000 });
         if (msg.chatId) {
           const s = await getStore();
@@ -781,7 +798,9 @@ on('LOG_INCOMING', async (msg) => {
 });
 
 on('SAVE_CONTEXT_BATCH', async (msg) => {
-        // content script streams full-history batches during first-run build
+        // content script streams full-history batches during first-run build.
+        // Serialized per chat: a batch landing mid-turn must not clobber it.
+        return withStoreLock(`logs:${msg.chatId}`, async () => {
         const { chats, logs } = await getStore();
         const c = chats[msg.chatId] || { name: msg.chatName, allowed: true, mode: 'auto', instruction: '' };
         c.name = msg.chatName || c.name;
@@ -802,6 +821,7 @@ on('SAVE_CONTEXT_BATCH', async (msg) => {
         await setStore({ chats, logs });
         await enforceQuota({ chats, logs });
         return { total: logs[msg.chatId].length };
+        });
 });
 
 on('FINALIZE_CONTEXT', async (msg) => {
@@ -978,6 +998,10 @@ on('SUBBOT_CONFIRM', async (msg) => {
           const store = await getStore();
           const d = msg.draft || {};
           if (d.kind === 'watch') {
+            // Serialize creates: the cap + duplicate checks below read-then-
+            // write, so overlapping confirms would all pass and overfill.
+            return withStoreLock('subbots', async () => {
+            const store = await getStore();
             const running = Object.values(store.subbots).filter((b) => b.kind === 'watch' && b.status === 'running').length;
             if (running >= MAX_WATCH_BOTS) throw new Error(`Max ${MAX_WATCH_BOTS} running watch bots. Stop one first.`);
             if (!d.target?.trim()) throw new Error('Watch bot needs a person name.');
@@ -1011,6 +1035,7 @@ on('SUBBOT_CONFIRM', async (msg) => {
             await setStore({ chats: store.chats });
             await saveSubbots(store.subbots);
             return { subbot: publicBot(bot) };
+            });
           } else if (d.kind === 'task') {
             const bot = newSubbot({ kind: 'task', name: d.name, userText: d.userText || '', target: d.target || '', task: d.task || d.userText || '' });
             store.subbots[bot.id] = bot;
@@ -1134,7 +1159,9 @@ on('SUBBOT_LIST', async () => {
 });
 
 on('NEW_SESSION', async (msg) => {
-        // msg: {chatId, chatName} — manual rollover: close active, open fresh
+        // msg: {chatId, chatName} — manual rollover: close active, open fresh.
+        // Locked per chat so a concurrent reply turn can't fork sessions.
+        return withStoreLock(`chat:${msg.chatId}`, async () => {
         const store = await getStore();
         const cfg = store.chats[msg.chatId] || { name: msg.chatName };
         const active = getActiveSession(store, msg.chatId);
@@ -1142,6 +1169,7 @@ on('NEW_SESSION', async (msg) => {
         const sess = await openSession(store, msg.chatId, 'manual', msg.chatName);
         const { limit, known } = ctxLimit(store);
         return { session: { id: sess.id, n: sess.n, ctx: formatCtx(0, limit, known), state: 'active' } };
+        });
 });
 
 on('EXPORT_CHAT', async (msg) => {
@@ -1156,10 +1184,24 @@ on('EXPORT_CHAT', async (msg) => {
         return { chat, logs: store.logs[msg.chatId] || [], sessions, activeSessionId: chat?.activeSessionId || null };
 });
 
+// Sender allowlist: only our own extension pages (popup/console, no tab)
+// and our content script inside WhatsApp Web may drive the worker. Anything
+// else — other extensions, web pages, spoofed senders — gets FORBIDDEN
+// before any handler runs.
+function senderAllowed(sender) {
+  try {
+    if (!sender || sender.id !== chrome.runtime.id) return false;
+    if (!sender.tab) return true; // extension page or worker self-call
+    const url = sender.tab.url || sender.url || '';
+    return typeof url === 'string' && /^https:\/\/web\.whatsapp\.com\//.test(url);
+  } catch { return false; }
+}
+
 // Thin envelope wrapper: handlers return payloads, errors carry .code.
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
+      if (!senderAllowed(sender)) throw new WbError('FORBIDDEN', 'Sender is not part of this extension.');
       const payload = await dispatch(msg, sender);
       sendResponse({ ok: true, ...(payload || {}) });
     } catch (e) {

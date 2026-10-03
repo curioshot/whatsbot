@@ -45,8 +45,17 @@
     msgContainer: ['div[data-testid="msg-container"]'],
     msgIn: ['div.message-in'],
     msgOut: ['div.message-out'],
+    // Any message row (container or bare bubble) — one selector for scans.
+    msgRow: ['div[data-testid="msg-container"]', 'div.message-in', 'div.message-out'],
     msgText: ['div[data-testid="msg-text"]', 'span.selectable-text span', 'div.copyable-text'],
     msgMeta: ['div[data-testid="msg-meta"]', 'span[data-testid="msg-meta"]'],
+    // Conversation header + side pane (chat list scope)
+    header: ['#main header', 'div[data-testid="conversation-header"]'],
+    sidePane: ['#pane-side', '#side'],
+    unreadCount: ['div[data-testid="unread-count"]'],
+    // Chat-row details (list parsing only — keep icon/testid lists here).
+    rowTitle: ['[title]', 'span[title]'],
+    rowGroupIcon: ['[data-icon^="default-group"]', '[data-icon="group"]', '[data-icon="default-groupv2"]'],
     // Composer
     composer: [
       'div[aria-label="Type a message"]',
@@ -93,6 +102,79 @@
       const h = q(document, SEL.headerTitle);
       if (!h) return '';
       return (h.getAttribute('title') || h.textContent || '').trim().slice(0, 120);
+    },
+    // Message-row helpers (single place for bubble class + testid knowledge).
+    msgRowEls(root) { return qa(root || document, SEL.msgRow); },
+    msgInEls(root) { return qa(root || document, SEL.msgIn); },
+    closestRow(node) {
+      try { return node?.closest?.('[data-testid="msg-container"]') || node; }
+      catch { return node; }
+    },
+    isRowBubble(n) {
+      try { return !!n?.matches?.('div.message-in, div.message-out'); }
+      catch { return false; }
+    },
+    innerBubble(n) {
+      try { return (n && !window.WADOM.isRowBubble(n) && n.querySelector?.('div.message-in, div.message-out')) || n; }
+      catch { return n; }
+    },
+    hasIn(node) {
+      try { return node?.classList?.contains('message-in') || !!node?.querySelector?.('.message-in'); }
+      catch { return false; }
+    },
+    hasOut(node) {
+      try { return node?.classList?.contains('message-out') || !!node?.querySelector?.('.message-out'); }
+      catch { return false; }
+    },
+    rowTextEl(node) { return q(node, SEL.msgText); },
+    rowMetaEl(node) { return q(node, SEL.msgMeta); },
+    unreadCountEl(root) { return q(root || document, SEL.unreadCount); },
+    rowTitleEl(row) { return q(row, SEL.rowTitle); },
+    rowIsGroup(row) {
+      try {
+        for (const s of SEL.rowGroupIcon) {
+          if (row?.querySelector?.(s)) return true;
+        }
+        return false;
+      } catch { return false; }
+    },
+    sidePaneEl() { return q(document, SEL.sidePane); },
+    headerEl() { return q(document, SEL.header); },
+    // Group heuristic: member lists / comma names in the header. Locale-
+    // fragile by nature — callers treat false as "unknown", never as 1:1
+    // proof (the author-header signal decides).
+    headerLooksGroup() {
+      try {
+        const h = window.WADOM.headerEl()?.innerText || '';
+        return /members|,/.test(h);
+      } catch { return false; }
+    },
+    hasPrePlain(root) {
+      try { return !!(root || document).querySelector?.('[data-pre-plain-text]'); }
+      catch { return false; }
+    },
+    // Layout self-test for the console: which selector families still hit
+    // on the live tab, and how many nodes each finds. No message text.
+    probeLayout() {
+      const out = [];
+      const checks = {
+        app: SEL.appRoot, chatList: SEL.chatList, searchBox: SEL.searchBox,
+        convoBody: SEL.convoBody, header: SEL.headerTitle, composer: SEL.composer,
+        sendBtn: SEL.sendBtn, sidePane: SEL.sidePane, msgRow: SEL.msgRow,
+        msgText: SEL.msgText, msgMeta: SEL.msgMeta,
+      };
+      for (const [k, sels] of Object.entries(checks)) {
+        let found = '', n = 0;
+        for (const s of sels) {
+          try {
+            const els = document.querySelectorAll(s);
+            if (els && els.length) { found = s; n = els.length; break; }
+          } catch {}
+        }
+        out.push({ key: k, ok: !!found, selector: found, count: n });
+      }
+      out.push({ key: 'groupHeuristic', ok: true, selector: 'header text', count: window.WADOM.headerLooksGroup() ? 1 : 0 });
+      return out;
     },
   };
 })();

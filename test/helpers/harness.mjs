@@ -47,6 +47,7 @@ globalThis.chrome = {
     onChanged: { addListener() {} },
   },
   runtime: {
+    id: 'test-ext',
     onMessage: { addListener(fn) { globalThis.__onMsg = fn; } },
     onInstalled: { addListener() {} },
     onStartup: { addListener() {} },
@@ -72,20 +73,22 @@ globalThis.fetch = async (url, opts = {}) => {
   return { ok: true, json: async () => ({ choices: [{ message: { content: '{"reply": "Hey!"}' } }] }), text: async () => '' };
 };
 
-function send(msg) {
+function send(msg, sender = { id: 'test-ext' }) {
   return new Promise((resolve, reject) => {
     try {
-      globalThis.__onMsg(msg, {}, resolve);
+      globalThis.__onMsg(msg, sender, resolve);
       setTimeout(() => reject(new Error('TIMEOUT ' + msg.type)), 15000);
     } catch (e) { reject(e); }
   });
 }
+const WA_TAB = { id: 'test-ext', tab: { url: 'https://web.whatsapp.com/' } };
+const EVIL_TAB = { id: 'test-ext', tab: { url: 'https://evil.example/' } };
 
 await import('../../src/background/service-worker.js');
 const results = [];
-async function t(name, msg, check) {
+async function t(name, msg, check, sender) {
   try {
-    const r = await send(msg);
+    const r = await send(msg, sender);
     const ok = check(r);
     results.push([ok ? 'PASS' : 'FAIL', name, ok ? '' : JSON.stringify(r).slice(0, 200)]);
   } catch (e) { results.push(['FAIL', name, 'threw: ' + e.message]); }
@@ -122,6 +125,18 @@ store.wb_global.device.token = 'x';
 await t('GEN_REPLY device-default bridge-down', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'hi', msgId: 'm11' }] }, (r) => !r.ok);
 store.wb_global.device.useAsDefault = false;
 store.wb_global.device.token = '';
+await t('FORBIDDEN spoofed sender', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [] }, (r) => !r.ok && r.code === 'FORBIDDEN', { id: 'evil-ext' });
+await t('FORBIDDEN evil tab', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [] }, (r) => !r.ok && r.code === 'FORBIDDEN', EVIL_TAB);
+await t('GEN_REPLY from WA tab', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'tab hi', msgId: 'm12' }] }, (r) => r.ok && r.reply === 'Hey!', WA_TAB);
+await t('DEVICE_TASK bench from tab refused', { type: 'DEVICE_TASK', agent: 'opencode', prompt: 'hi' }, (r) => !r.ok && r.code === 'FORBIDDEN', WA_TAB);
+// 6 overlapping watch creates with cap 5 → exactly 5 win, 1 rejected Max.
+// Without the store lock all 6 would pass the count check together.
+{
+  const rs = await Promise.all([0, 1, 2, 3, 4, 5].map((i) => send({ type: 'SUBBOT_CONFIRM', draft: { kind: 'watch', target: 'Cap' + i, instruction: 'Be brief.', name: 'W' + i, userText: 'watch cap' + i } })));
+  const okN = rs.filter((r) => r.ok).length;
+  const maxN = rs.filter((r) => !r.ok && /Max 5/.test(r.error || '')).length;
+  results.push([okN === 5 && maxN === 1 ? 'PASS' : 'FAIL', 'SUBBOT_CONFIRM concurrent cap', `ok=${okN} max-rejected=${maxN}`]);
+}
 
 let fail = 0;
 for (const [s, n, extra] of results) { console.log(s, '-', n, extra); if (s !== 'PASS') fail++; }

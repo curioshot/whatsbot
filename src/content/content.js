@@ -72,8 +72,7 @@
     const name = raw || 'unknown';
     let suffix = '';
     try {
-      // headerLooksGroup is defined below (function declaration, hoisted).
-      if (raw && typeof headerLooksGroup === 'function' && headerLooksGroup()) suffix = '#group';
+      if (raw && window.WADOM.headerLooksGroup()) suffix = '#group';
     } catch {}
     return { chatId: 'name:' + (raw ? raw.toLowerCase() : 'unknown') + suffix, chatName: name, kind: suffix ? 'group' : 'chat' };
   }
@@ -152,31 +151,22 @@
     return 'center';
   }
 
-  function headerLooksGroup() {
-    try {
-      const h = document.querySelector('#main header')?.innerText || '';
-      return /members|,/.test(h);
-    } catch { return false; }
-  }
-
   // Group-by-signal: a chat is a group if ANY visible message carries an
   // author header (1:1 messages never do). Falls back to the header heuristic.
   function detectGroup(body) {
-    if (headerLooksGroup()) return true;
-    try {
-      return !!body.querySelector?.('[data-pre-plain-text]');
-    } catch { return false; }
+    if (window.WADOM.headerLooksGroup()) return true;
+    return window.WADOM.hasPrePlain(body);
   }
 
   function parseMessageNode(node, groupHint, geo) {
     try {
-      const clsOut = node.classList?.contains('message-out') || !!node.querySelector?.('.message-out');
-      const clsIn = node.classList?.contains('message-in') || !!node.querySelector?.('.message-in');
+      const clsOut = window.WADOM.hasOut(node);
+      const clsIn = window.WADOM.hasIn(node);
       // data-id must come from the message ROW itself — never from a descendant:
       // quoted/forwarded bubbles inside carry their own data-id flags and a
       // naive querySelector('[data-id]') picks those up, flipping direction
       // and mass-marking messages 'uncertain'.
-      const row = node.closest?.('[data-testid="msg-container"]') || node;
+      const row = window.WADOM.closestRow(node);
       const dataId =
         row.getAttribute?.('data-id') ||
         node.getAttribute?.('data-id') || '';
@@ -184,13 +174,13 @@
       const chatName = window.WADOM.activeChatName() || 'Contact';
       const rowEl = row.nodeType === 1 ? row : node;
       const align = geo ? bubbleAlign(rowEl.getBoundingClientRect(), geo.midX, geo.span) : 'center';
-      const a = attributeSignals({ clsIn, clsOut, dataId, preAuthor: pre, chatName, isGroup: groupHint ?? headerLooksGroup(), align });
-      const textEl = node.querySelector?.('div[data-testid="msg-text"], span.selectable-text, div.copyable-text');
+      const a = attributeSignals({ clsIn, clsOut, dataId, preAuthor: pre, chatName, isGroup: groupHint ?? window.WADOM.headerLooksGroup(), align });
+      const textEl = window.WADOM.rowTextEl(node);
       let text = (textEl?.innerText || node.innerText || '').trim();
       // strip trailing timestamp (e.g. "hello 22:10")
       text = text.replace(/\s\d{1,2}:\d{2}(\s?(AM|PM))?\s*$/, '').trim();
       if (!text) return null;
-      const meta = node.querySelector?.('[data-testid="msg-meta"]')?.textContent?.trim() || '';
+      const meta = window.WADOM.rowMetaEl(node)?.textContent?.trim() || '';
       const msgId = dataId || `${a.dir}:${text.slice(0, 40)}:${meta}`;
       return { msgId, dir: a.dir, speaker: a.speaker, sender: a.name, name: a.name, via: a.via, text: text.slice(0, 2000), meta };
     } catch {
@@ -205,7 +195,7 @@
   function readVisibleMessages() {
     const body = window.WADOM.convoBodyEl();
     if (!body) return [];
-    const nodes = body.querySelectorAll('div[data-testid="msg-container"], div.message-in, div.message-out');
+    const nodes = window.WADOM.msgRowEls(body);
     const out = [];
     const groupHint = detectGroup(body); // once per scan, not per message
     // Signal survey counts each message ROW once: the selector above matches
@@ -218,9 +208,9 @@
       geo = { midX: b.left + b.width / 2, span: b.width };
     } catch {}
     for (const n of nodes) {
-      // msg-container wraps actual bubble; find inner or use node itself
-      const target = n.matches?.('div.message-in, div.message-out') ? n : n.querySelector?.('div.message-in, div.message-out') || n;
-      const rowKey = target.closest?.('[data-testid="msg-container"]') || target;
+      // Row wrapper holds the actual bubble; find inner or use node itself.
+      const target = window.WADOM.innerBubble(n);
+      const rowKey = window.WADOM.closestRow(target);
       if (!surveyedRows.has(rowKey)) {
         surveyedRows.add(rowKey);
         surveySignals(target, sig);
@@ -248,9 +238,9 @@
   // Count raw signal presence (cheap, no parsing) to diagnose layout drift.
   function surveySignals(node, sig) {
     try {
-      if (node.classList?.contains('message-in') || node.querySelector?.('.message-in')) sig.clsIn++;
-      if (node.classList?.contains('message-out') || node.querySelector?.('.message-out')) sig.clsOut++;
-      const row = node.closest?.('[data-testid="msg-container"]') || node;
+      if (window.WADOM.hasIn(node)) sig.clsIn++;
+      if (window.WADOM.hasOut(node)) sig.clsOut++;
+      const row = window.WADOM.closestRow(node);
       const id = row.getAttribute?.('data-id') || node.getAttribute?.('data-id') || '';
       if (!id) sig.idNone++;
       else if (id.startsWith('true_')) sig.idTrue++;
@@ -272,7 +262,7 @@
       const now = Date.now();
       if (lastScan.dom && now - lastDomAt < 15000) return lastScan.dom;
       lastDomAt = now;
-      const rows = body.querySelectorAll('div[data-testid="msg-container"], div.message-in, div.message-out');
+      const rows = window.WADOM.msgRowEls(body);
       const keepCls = (c) => /message|testid|bubble|row|selectable|copyable/i.test(c) || c.includes('-') || c.includes('_') || c.length > 10;
       const sketchEl = (el, depth) => {
         if (!el || depth < 0) return '';
@@ -344,12 +334,13 @@
     const rows = window.WADOM.qa(document, window.WADOM.SEL.chatRow).slice(0, 80);
     return rows.map((r) => {
       const lines = (r.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
-      const title = r.querySelector?.('[title]')?.getAttribute?.('title') || r.querySelector?.('span[title]')?.textContent || lines[0] || '';
-      const unread = r.querySelector?.('[data-testid="unread-count"]')?.textContent || '';
+      const titleEl = window.WADOM.rowTitleEl(r);
+      const title = titleEl?.getAttribute?.('title') || titleEl?.textContent || lines[0] || '';
+      const unread = window.WADOM.unreadCountEl(r)?.textContent || '';
       // preview = first informative line that isn't the name, a time/date, or a bare count
       const preview = lines.find((l) => l !== title.trim() && !/^\d{1,2}:\d{2}(\s?(AM|PM))?$/.test(l) && !/^\d+$/.test(l) && !/^(yesterday|today)$/i.test(l) && !/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(l) && !/^\d{1,2}[\/\-.]\d{1,2}([\/\-.]\d{2,4})?$/.test(l)) || '';
       // best-effort group flag: group rows carry a group avatar icon
-      const isGroup = !!r.querySelector?.('[data-icon^="default-group"], [data-icon="group"], [data-icon="default-groupv2"]');
+      const isGroup = window.WADOM.rowIsGroup(r);
       return { name: title.trim().slice(0, 120), unread: unread.trim(), preview: preview.slice(0, 160), kind: isGroup ? 'group' : 'chat' };
     }).filter((c) => c.name);
   }
@@ -357,7 +348,7 @@
   // Raw read of whatever the contacts pane currently shows (no open/close).
   function readContactsPane() {
     const pane = window.WADOM.contactsPaneEl();
-    const scope = pane || document.getElementById('side') || document;
+    const scope = pane || window.WADOM.sidePaneEl() || document;
     const rows = window.WADOM.qa(scope, window.WADOM.SEL.contactsRow).slice(0, 300);
     const skip = /^(new group|new community|starred messages|archived|settings|contacts on whatsapp)$/i;
     const out = [];
@@ -397,7 +388,7 @@
         if (contacts.length === lastCount) { still++; } else { still = 0; lastCount = contacts.length; }
         if (contacts.length && still >= 2) break; // loaded and stable
         // scroll the side pane to trigger lazy loading of more contacts
-        const side = document.getElementById('side');
+        const side = window.WADOM.sidePaneEl();
         const scroller = window.WADOM.contactsPaneEl() || side;
         if (scroller) scroller.scrollTop = scroller.scrollHeight;
       }
@@ -757,6 +748,11 @@
       paintResult(`BLOCKED — ${res?.error || 'replies are disabled for this chat.'}\nFix: Console → Rules → Allow the chat, or enable the bot in the popup.`);
       return true;
     }
+    if (res?.code === 'FORBIDDEN') {
+      updateBadge(chatName, 'blocked: outside call (see detail)', 'err');
+      paintResult(`BLOCKED — ${res?.error || 'this call did not come from the extension.'}\nNothing was sent. If you pressed a WhatsBot button, reload the tab.`);
+      return true;
+    }
     return false;
   }
 
@@ -775,13 +771,13 @@
     try {
       const body = window.WADOM.convoBodyEl();
       if (!body) return null;
-      const ins = body.querySelectorAll('div.message-in');
+      const ins = window.WADOM.msgInEls(body);
       if (ins?.length) {
         const last = ins[ins.length - 1];
-        return last.closest?.('[data-testid="msg-container"]') || last;
+        return window.WADOM.closestRow(last);
       }
       // Fallback when WA renames bubble classes: last message container.
-      const rows = body.querySelectorAll('div[data-testid="msg-container"]');
+      const rows = window.WADOM.msgRowEls(body);
       if (rows?.length) return rows[rows.length - 1];
       return null;
     } catch { return null; }
@@ -1213,6 +1209,7 @@
     (async () => {
       switch (msg.type) {
         case 'PING': sendResponse({ ok: true, loaded: window.WADOM.isLoaded(), chat: activeChatKey() }); break;
+        case 'CHECK_LAYOUT': sendResponse({ ok: true, probe: window.WADOM.probeLayout() }); break;
         case 'LIST_CHATS': sendResponse({ ok: true, chats: listChats(), active: activeChatKey() }); break;
         case 'LIST_CONTACTS': {
           const { contacts, groups } = await openContactsAndList();
@@ -1225,7 +1222,16 @@
           break;
         }
         case 'READ_ACTIVE': sendResponse({ ok: true, ...activeChatKey(), messages: readVisibleMessages().slice(-(msg.limit || 50)) }); break;
-        case 'SEND_TEXT': await sendText(msg.text); sendResponse({ ok: true }); break;
+        case 'SEND_TEXT': {
+          // Optional chat check: if the caller names a chat, refuse instead
+          // of typing into whatever happens to be open.
+          if (msg.chatId && activeChatKey().chatId !== msg.chatId) {
+            const e = new Error('wrong chat open — nothing sent');
+            e.code = 'WRONG_CHAT';
+            throw e;
+          }
+          await sendText(msg.text); sendResponse({ ok: true }); break;
+        }
         case 'MANUAL_REPLY': await manualReply(); sendResponse({ ok: true }); break;
         case 'BUILD_CONTEXT_HERE': {
           const { chatId, chatName } = activeChatKey();

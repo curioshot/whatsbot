@@ -68,6 +68,24 @@ wire('ping', async () => {
   } catch (e) { setWa(false, 'WhatsApp: unreachable'); setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
 });
 
+wire('checkLayout', async () => {
+  // Layout self-test: which selector families still hit on the live WA tab.
+  // Red rows mean WhatsApp renamed something — fix src/content/whatsapp-dom.js.
+  const out = $('layoutOut');
+  try {
+    setStatus($('conn'), 'Probing WhatsApp layout…');
+    const r = await sendToWA('CHECK_LAYOUT');
+    if (!r?.ok) throw new Error(r?.error || 'no probe');
+    const rows = (r.probe || []).map((p) => `${p.ok ? 'ok  ' : 'FAIL'} ${p.key} (${p.count})${p.ok ? '' : ' — check whatsapp-dom.js'}`);
+    if (out) out.textContent = rows.join('\n') || '(empty probe)';
+    const bad = (r.probe || []).filter((p) => !p.ok).map((p) => p.key);
+    setStatus($('conn'), bad.length ? `Layout drift: ${bad.join(', ')} missing — see whatsapp-dom.js` : `Layout OK (${(r.probe || []).length} signals).`, bad.length ? 'err' : 'ok');
+  } catch (e) {
+    if (out) out.textContent = '';
+    setStatus($('conn'), 'Failed: ' + e.message, 'err');
+  }
+});
+
 wire('list', async () => {
   try {
     const r = await sendToWA('LIST_CHATS');

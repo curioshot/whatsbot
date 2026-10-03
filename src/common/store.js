@@ -157,3 +157,39 @@ export async function setStore(patch) {
   if (patch.subbots) m[SKEYS.subbots] = patch.subbots;
   await chrome.storage.local.set(m);
 }
+
+// Best-effort per-scope mutex on chrome.storage.session (self-heals via TTL
+// when the worker dies mid-hold). Serializes read-modify-write sections that
+// would otherwise last-writer-win under concurrent chats/bots — e.g. two
+// watch creates both passing the cap check, or a build batch landing
+// mid-turn. Scope is a chat id or a area name ('subbots'), never the whole
+// store, so unrelated chats don't serialize. Without a session API
+// (unit tests) it runs unlocked.
+const STORE_LOCK_TTL_MS = 5000;
+export async function withStoreLock(scope, fn) {
+  const key = `wb_mu_${String(scope || 'global')}`;
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const noSession = !globalThis.chrome?.storage?.session;
+  if (noSession) return fn();
+  const deadline = Date.now() + STORE_LOCK_TTL_MS;
+  for (;;) {
+    let cur = null;
+    try { cur = (await chrome.storage.session.get([key]))[key]; } catch { return fn(); }
+    if (!cur || Date.now() - (cur.ts || 0) > STORE_LOCK_TTL_MS) {
+      try { await chrome.storage.session.set({ [key]: { ts: Date.now(), token } }); } catch { return fn(); }
+      let re = null;
+      try { re = (await chrome.storage.session.get([key]))[key]; } catch {}
+      if (re?.token === token) {
+        try { return await fn(); }
+        finally {
+          try {
+            const now = (await chrome.storage.session.get([key]))[key];
+            if (now?.token === token) await chrome.storage.session.remove([key]);
+          } catch {}
+        }
+      }
+    }
+    if (Date.now() >= deadline) throw new Error(`store busy (${scope}) — retry`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
