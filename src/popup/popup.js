@@ -149,7 +149,7 @@ function renderProvFields() {
   $('provFields').innerHTML = `
     <div class="prov"><h4>${esc(def.label)}</h4>
     <label class="field"><span>Base URL</span><input type="text" id="f-base" value="${esc(cfg.baseUrl || def.baseUrl)}"></label>
-    <label class="field"><span>Model — ${cached.length} known</span>
+    <label class="field"><span>Model — ${cached.length} known (pick, or type a custom id below)</span>
       <select id="f-model-sel">${opts}</select>
       <input type="text" id="f-model" value="${esc(cur)}" placeholder="type or pick model id" style="margin-top:6px">
     </label>

@@ -109,11 +109,13 @@ textarea { resize: vertical; min-height: 64px; border-radius: var(--r-sm); }
 .switch input:checked + .track { background: var(--accent); border-color: var(--accent); }
 .switch input:checked + .track::after { transform: translateX(16px); background: var(--accent-text); }
 
-.tabs { display: flex; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; }
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs button {
-  flex: 1; border: none; background: transparent; color: var(--text-2);
-  border-radius: var(--r-pill); padding: 8px 6px; font: inherit; font-weight: 650; cursor: pointer;
+  flex: none; border: none; background: transparent; color: var(--text-2);
+  border-radius: var(--r-pill); padding: 8px 10px; font: inherit; font-weight: 650; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap;
 }
 .tabs button.active { background: var(--accent); color: var(--accent-text); }
 
