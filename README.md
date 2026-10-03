@@ -38,9 +38,11 @@ command box right inside WhatsApp.
 cd bridge && node bridge.mjs
 ```
 
-Then: Console (side panel) → List chats → Add/Allow → write each chat's
-instruction → **Save instruction** → Build contexts → enable bot in popup.
-The toolbar badge shows `ON` while the bot runs.
+Then: popup → **Chats** → Find WhatsApp chats → tick the ones you want →
+tell each how to behave → **Save — teaches it** (learns past messages
+automatically) → enable bot in popup. The toolbar badge shows `ON` while
+the bot runs. (The old sidepanel Console still exists but is legacy —
+everything above lives in the popup now.)
 
 ## Everyday use
 

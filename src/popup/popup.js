@@ -1,6 +1,8 @@
 import { PROVIDERS, DEFAULT_GLOBAL, defaultProvidersState, FALLBACK_MODELS } from '../common/providers.js';
 import { modelCaps, BOT_USES, CAP_LABELS } from '../common/models.js';
 import { DEVICE_AGENTS } from '../common/device.js';
+import { memorySentence, chatStateSentence } from '../common/chattext.js';
+import { chatIdForName } from '../common/subbots.js';
 import { applyTheme, wireThemeButton, watchSystem } from '../ui/theme.js';
 
 const $ = (id) => document.getElementById(id);
@@ -190,7 +192,7 @@ function renderCaps() {
 
 // tabs (null-safe: a renamed pane id must not kill the whole popup).
 // The last open tab is remembered across popup opens (wb_ui, UI-only key).
-const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
+const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabChats', 'paneChats'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
 function showTab(pane, save = true) {
   for (const [b] of TABS) $(b)?.classList.remove('active');
   for (const [, p] of TABS) { const el = $(p); if (el) el.hidden = true; }
@@ -199,6 +201,7 @@ function showTab(pane, save = true) {
   const pel = $(pane);
   if (pel) pel.hidden = false;
   if (pane === 'paneBots') refreshSubbots();
+  if (pane === 'paneChats') renderChatRows().catch(() => {});
   if (save) { try { chrome.storage.local.set({ wb_ui: { tab: pane } }); } catch {} }
 }
 for (const [btn, pane] of TABS) {
@@ -410,6 +413,156 @@ $('devTest').onclick = async () => {
     setStatus($('devStatus'), 'Failed: ' + e.message, 'err');
   }
 };
+
+// ---------- Chats tab (plain-words rules: tick, teach, saving teaches) ----------
+async function waTab() {
+  const tabs = await chrome.tabs.query({ url: '*://web.whatsapp.com/*' });
+  if (!tabs.length) throw new Error('Open web.whatsapp.com in a tab first (and scan QR).');
+  return tabs[0];
+}
+async function sendToWA(type, extra = {}) {
+  const tab = await waTab();
+  try {
+    return await chrome.tabs.sendMessage(tab.id, { type, ...extra });
+  } catch (e) {
+    if (!/Receiving end does not exist|Could not establish connection/i.test(e.message || '')) throw e;
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['src/content/whatsapp-dom.js', 'src/content/content.js'],
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      return await chrome.tabs.sendMessage(tab.id, { type, ...extra });
+    } catch {
+      throw new Error('WhatsApp tab still not responding. Hard-reload it, wait for the floating button, then retry.');
+    }
+  }
+}
+
+async function renderChatRows() {
+  const box = $('chatRows');
+  if (!box) return;
+  const r = await chrome.storage.local.get(['wb_chats', 'wb_logs', 'wb_global']);
+  const chats = r.wb_chats || {};
+  const logs = r.wb_logs || {};
+  const enabled = !!r.wb_global?.enabled;
+  box.innerHTML = '';
+  const ids = Object.keys(chats);
+  if (!ids.length) {
+    box.innerHTML = '<div class="hint">No chats yet — press Find WhatsApp chats, tick the ones you want.</div>';
+    return;
+  }
+  for (const id of ids) {
+    const c = chats[id] || {};
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.margin = '8px 0 0';
+    const head = document.createElement('div');
+    head.className = 'row';
+    const name = document.createElement('strong');
+    name.textContent = c.name || id;
+    const st = document.createElement('span');
+    st.className = 'hint';
+    st.style.margin = '0';
+    st.textContent = ` · ${chatStateSentence(c, enabled)}`;
+    const sw = document.createElement('label');
+    sw.className = 'switch';
+    sw.style.marginLeft = 'auto';
+    sw.title = 'Let the bot answer this chat';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!c.allowed;
+    cb.onchange = async () => {
+      try {
+        const s = await chrome.storage.local.get(['wb_chats']);
+        const all = s.wb_chats || {};
+        if (!all[id]) throw new Error('Chat is gone — refresh.');
+        all[id].allowed = cb.checked;
+        await chrome.storage.local.set({ wb_chats: all });
+        st.textContent = ` · ${chatStateSentence(all[id], enabled)}`;
+      } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); cb.checked = !cb.checked; }
+    };
+    const track = document.createElement('span');
+    track.className = 'track';
+    sw.appendChild(cb); sw.appendChild(track);
+    head.appendChild(name); head.appendChild(st); head.appendChild(sw);
+    const mem = document.createElement('div');
+    mem.className = 'hint';
+    mem.textContent = memorySentence(c, (logs[id] || []).length);
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = 'How should it behave here? e.g. reply short, same language.';
+    ta.value = c.instruction || '';
+    const row2 = document.createElement('div');
+    row2.className = 'row';
+    row2.style.marginTop = '6px';
+    const save = document.createElement('button');
+    save.className = 'btn sm primary';
+    save.textContent = 'Save — teaches it';
+    const sst = document.createElement('span');
+    sst.className = 'hint';
+    sst.style.margin = '0';
+    save.onclick = async () => {
+      try {
+        sst.textContent = 'Saving…';
+        const s = await chrome.storage.local.get(['wb_chats']);
+        const all = s.wb_chats || {};
+        if (!all[id]) throw new Error('Chat is gone — refresh.');
+        all[id].instruction = ta.value.slice(0, 2000).trim();
+        await chrome.storage.local.set({ wb_chats: all });
+        // Teach = instruction + memory in one press: learn past messages
+        // automatically when this chat has no memory yet.
+        if (!all[id].contextMd) {
+          sst.textContent = 'Learning past messages… (opens the chat briefly)';
+          const b = await sendToWA('BUILD_CONTEXT_NAMED', { name: all[id].name });
+          if (!b?.ok) throw new Error(b?.error || 'learning failed');
+          const s2 = await chrome.storage.local.get(['wb_chats', 'wb_logs']);
+          Object.assign(all, s2.wb_chats || {});
+          Object.assign(logs, s2.wb_logs || {});
+        }
+        mem.textContent = memorySentence(all[id], (logs[id] || []).length);
+        st.textContent = ` · ${chatStateSentence(all[id], enabled)}`;
+        sst.textContent = 'Saved.';
+      } catch (e) { sst.textContent = 'Failed: ' + e.message; }
+    };
+    row2.appendChild(save); row2.appendChild(sst);
+    card.appendChild(head); card.appendChild(mem); card.appendChild(ta); card.appendChild(row2);
+    box.appendChild(card);
+  }
+}
+
+$('chatsRefresh')?.addEventListener('click', async () => {
+  try {
+    setStatus($('chatsStatus'), 'Reading WhatsApp chats…');
+    const r = await sendToWA('LIST_CHATS');
+    const found = r.chats || [];
+    if (!found.length) { setStatus($('chatsStatus'), 'No chats found — open a conversation in WhatsApp first.', 'err'); return; }
+    const s = await chrome.storage.local.get(['wb_chats']);
+    const all = s.wb_chats || {};
+    let added = 0;
+    for (const c of found) {
+      if (!c.name) continue;
+      const id = chatIdForName(c.name, c.kind);
+      if (!all[id]) {
+        all[id] = { name: c.name, kind: c.kind || 'chat', allowed: false, mode: 'auto', suggestMode: 'global', routeTo: 'cloud', cwd: '', instruction: '', contextMd: '' };
+        added++;
+      }
+    }
+    await chrome.storage.local.set({ wb_chats: all });
+    await renderChatRows();
+    setStatus($('chatsStatus'), `Found ${found.length} chats${added ? `, ${added} new (tick to allow)` : ''}.`, 'ok');
+  } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+});
+$('chatsAllowAll')?.addEventListener('click', async () => {
+  try {
+    const s = await chrome.storage.local.get(['wb_chats']);
+    const all = s.wb_chats || {};
+    for (const c of Object.values(all)) c.allowed = true;
+    await chrome.storage.local.set({ wb_chats: all });
+    await renderChatRows();
+    setStatus($('chatsStatus'), 'All chats ticked. Teach the ones missing instructions.', 'ok');
+  } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+});
 
 // ---------- subbots (status mirror — full control lives in the WhatsApp dock) ----------
 async function refreshSubbots() {

@@ -25,6 +25,7 @@
   <nav class="tabs" role="tablist">
     <button id="tabModel" class="active"><svg class="icon"><use href="#i-cpu"/></svg>Model</button>
     <button id="tabDevice"><svg class="icon"><use href="#i-plug"/></svg>Device</button>
+    <button id="tabChats"><svg class="icon"><use href="#i-chat"/></svg>Chats</button>
     <button id="tabBots"><svg class="icon"><use href="#i-bot"/></svg>Bots</button>
     <button id="tabPolicy"><svg class="icon"><use href="#i-sliders"/></svg>Policy</button>
   </nav>
@@ -72,6 +73,17 @@
     <div id="devStatus" class="status"></div>
     <div id="devSummary" class="hint"></div>
     <button id="devEdit" class="btn sm" hidden>Edit connection</button>
+  </section>
+
+  <section id="paneChats" class="card float" hidden>
+    <h3><svg class="icon"><use href="#i-chat"/></svg>Chats</h3>
+    <div class="hint">Tick the chats the bot may answer, tell each one how to behave — saving teaches it.</div>
+    <div class="row wrap">
+      <button id="chatsRefresh" class="btn sm primary"><svg class="icon"><use href="#i-refresh"/></svg>Find WhatsApp chats</button>
+      <button id="chatsAllowAll" class="btn sm">Allow all</button>
+    </div>
+    <div id="chatsStatus" class="status"></div>
+    <div id="chatRows"></div>
   </section>
 
   <section id="paneBots" class="card float" hidden>
@@ -124,6 +136,7 @@
 <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="5"/><circle cx="9" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/><path d="M12 8V4M8 4h8"/></symbol>
 <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
 <symbol id="i-models" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5"/></symbol>
 <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 01-10 0zM12 17v4"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5v14l11-7z"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="10" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
