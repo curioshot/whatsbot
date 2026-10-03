@@ -44,12 +44,10 @@ The toolbar badge shows `ON` while the bot runs.
 
 ## Everyday use
 
-- **Floating dock (in WhatsApp):** AI Reply button, Build button, a thinking
-  view (quoted source, stages, session + context meter), and a **task box**.
-  Try `msg to krypton that i am going to his home` or `report unread`.
-  Slash shortcuts: `/reply /build /auto /code /newbot /report /msg /stop /help`.
-- **Console (side panel):** §1 connection/chats/contacts · §2 context builds ·
-  §3 per-chat rules · §4 device test bench · §5 context + logs + sessions.
+- **Floating dock (in WhatsApp):** two tabs — **Reply** (AI Reply button, Build button, thinking view with quoted source, stages, session + context meter, sent receipt, and a **task box**) and **Bots** (watch/task launch, cards, history). Try `msg to krypton that i am going to his home` or `report unread`.
+  Slash shortcuts: `/reply /build /auto /code /newbot /report /msg /stop /help`. The status line keeps errors until the next action; transient notes fade to idle. Setup progress (`n/5`) shows until everything is done.
+- **Suggestions (optional):** Popup → Policy → Suggestions On + Console §3 per-chat Suggest (follow global/on/off). When on and the chat has an instruction, 2-3 chips appear under the last incoming message in WhatsApp — a shimmer shows while they generate; click inserts into the box, never sends. `×` dismisses per message.
+- **Console:** stepper nav shows live counts (§1 connection · §2 contexts built · §3 rules allowed · §4 device · §5 logs). §3 rule cards collapse (attention-needed cards start open) with Allow-all / Build-all / Expand-all / Collapse-all; §5 filters logs by direction + text. Popup remembers its last tab; the Device tab collapses credentials into a summary row once connected.
 - **Auto-reply:** only in allowed chats in auto mode. The dock thinking pill
   and Last result line show every trigger and outcome.
 

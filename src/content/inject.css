@@ -32,7 +32,8 @@
 #wb-fab .wb-ring.warn { background: var(--wb-warn); }
 #wb-fab .wb-ring.err { background: var(--wb-err); }
 #whatsbot-panel {
-  width: 288px; background: var(--wb-surface); color: var(--wb-text);
+  width: 288px; min-width: 240px; max-width: calc(100vw - 32px);
+  background: var(--wb-surface); color: var(--wb-text);
   border: 1px solid var(--wb-border); border-radius: 28px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   overflow: hidden;
@@ -105,14 +106,18 @@
 }
 #whatsbot-dock .wb-brain.warn { color: var(--wb-warn); font-weight: 700; }
 #whatsbot-dock .wb-mono { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; }
-#whatsbot-dock .wb-bots-toggle {
-  display: flex; align-items: center; gap: 8px; width: calc(100% - 28px);
-  margin: 0 14px 10px; padding: 9px 12px;
+#whatsbot-dock .wb-tabs {
+  display: flex; gap: 4px; margin: 0 14px 8px; padding: 3px;
   background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
-  color: var(--wb-text); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
 }
-#whatsbot-dock .wb-bots-toggle .wb-chev { margin-left: auto; transition: transform 0.15s; }
-#whatsbot-dock .wb-bots-toggle.open .wb-chev { transform: rotate(90deg); }
+#whatsbot-dock .wb-tab {
+  flex: 1; border: none; background: transparent; color: var(--wb-text-2);
+  border-radius: 20px; padding: 7px 10px; font: inherit; font-size: 12px; font-weight: 650;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+#whatsbot-dock .wb-tab.active { background: var(--wb-surface-2); color: var(--wb-text); }
+#whatsbot-dock .wb-tab #wb-bots-sum { font-weight: 400; font-size: 11px; }
+#whatsbot-dock #wb-pane-reply[hidden], #whatsbot-dock #wb-pane-bots[hidden] { display: none; }
 #whatsbot-dock .wb-subsec {
   margin: 0 14px 10px; padding: 10px 12px;
   background: var(--wb-bg); border: 1px solid var(--wb-border); border-radius: 20px;
@@ -133,6 +138,9 @@
 }
 #whatsbot-dock .wb-mini:hover { background: var(--wb-surface-2); }
 #whatsbot-dock .wb-mini.primary { background: var(--wb-accent); color: var(--wb-accent-text); border-color: var(--wb-accent); }
+#whatsbot-dock .wb-mini.danger { border-color: var(--wb-err); color: var(--wb-err); }
+#whatsbot-dock .wb-mini.danger:hover { background: var(--wb-err); color: #fff; }
+#whatsbot-dock .wb-mini[disabled] { opacity: 0.55; cursor: wait; }
 #whatsbot-dock .wb-botcard {
   border: 1px solid var(--wb-border); border-radius: 20px;
   padding: 8px 10px; margin-top: 6px; background: var(--wb-surface);
@@ -160,6 +168,14 @@
 }
 #whatsbot-dock .wb-onboard[hidden] { display: none; }
 #whatsbot-dock .wb-onboard .wb-step { padding: 3px 0; }
+#whatsbot-dock .wb-obar {
+  height: 6px; border-radius: 30px; background: var(--wb-surface-2);
+  margin: 2px 0 8px; overflow: hidden;
+}
+#whatsbot-dock .wb-ofill {
+  height: 100%; width: 0; border-radius: 30px; background: var(--wb-ok);
+  transition: width 0.3s;
+}
 #whatsbot-dock .wb-taskrow { display: flex; gap: 6px; padding: 0 14px 14px; }
 #whatsbot-dock .wb-taskrow input {
   flex: 1; min-width: 0; background: var(--wb-bg); color: var(--wb-text);
@@ -212,6 +228,14 @@
   .wb-sug-x { color: #8696a0; border-color: rgba(255, 255, 255, 0.14); background: #202c33; }
   .wb-sug-x:hover { background: #2a3942; color: #e9edef; }
 }
+/* Dock theme toggle reaches page-level chips via data-theme (media query above is the fallback). */
+.wb-suggest-row[data-theme="dark"] .wb-sug-chip { background: #202c33; color: #e9edef; border-color: rgba(255, 255, 255, 0.14); }
+.wb-suggest-row[data-theme="dark"] .wb-sug-chip:hover { background: #2a3942; }
+.wb-suggest-row[data-theme="dark"] .wb-sug-x { color: #8696a0; border-color: rgba(255, 255, 255, 0.14); background: #202c33; }
+/* Loading shimmer while the preview generates. */
+.wb-sug-chip.shim { min-width: 90px; min-height: 28px; pointer-events: none; }
+.wb-suggest-row[data-theme="dark"] .wb-sug-chip.shim, .wb-sug-chip.shim { animation: wb-shim 1.1s ease-in-out infinite; }
+@keyframes wb-shim { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) {
   #whatsbot-dock .wb-spinner, #whatsbot-dock .wb-step.doing .st-dot, #wb-fab .wb-ring.warn { animation: none; }
 }

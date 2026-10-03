@@ -15,7 +15,7 @@
   </header>
 
   <nav class="stepnav">
-    <a href="#s1">01 Connect</a><a href="#s2">02 Context</a><a href="#s3">03 Rules</a><a href="#s4">04 Device</a><a href="#s5">05 Logs</a>
+    <a href="#s1" id="nav1">01 Connect</a><a href="#s2" id="nav2">02 Context</a><a href="#s3" id="nav3">03 Rules</a><a href="#s4" id="nav4">04 Device</a><a href="#s5" id="nav5">05 Logs</a>
   </nav>
 
   <section id="s1" class="card float">
@@ -47,6 +47,12 @@
     <h3><svg class="icon"><use href="#i-sliders"/></svg>3. Allowlist + per-chat instructions</h3>
     <div class="hint">Instruction = behaviour for that account (tone, language, boundaries) — <strong>required: AI never replies without one.</strong> Brain = cloud LLM or on-device agent. <span class="mono">/code</span> prefix forces device.</div>
     <div class="row"><input id="newChat" placeholder="Chat name"><button id="addChat" class="btn sm primary"><svg class="icon"><use href="#i-plus"/></svg>Add</button></div>
+    <div class="row wrap" style="margin-top:8px">
+      <button id="bulkAllow" class="btn sm">Allow all</button>
+      <button id="bulkBuild" class="btn sm">Build all allowed</button>
+      <button id="bulkExpand" class="btn sm">Expand all</button>
+      <button id="bulkCollapse" class="btn sm">Collapse all</button>
+    </div>
     <div id="rules"></div>
   </section>
 
@@ -69,6 +75,14 @@
       <button id="newSession" class="btn sm"><svg class="icon"><use href="#i-plus"/></svg>New session</button>
       <button id="dlCtx" class="btn sm"><svg class="icon"><use href="#i-download"/></svg>MD</button>
       <button id="dlLogs" class="btn sm"><svg class="icon"><use href="#i-download"/></svg>JSON</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="logDir" title="Filter direction">
+        <option value="">all directions</option>
+        <option value="in">incoming only</option>
+        <option value="out">sent only</option>
+      </select>
+      <input id="logQ" placeholder="Search logs…" style="flex:1;min-width:0">
     </div>
     <div id="sessList"></div>
     <pre id="viewer" class="viewer"></pre>

@@ -2,10 +2,17 @@ import { applyTheme, wireThemeButton, watchSystem } from '../ui/theme.js';
 
 const $ = (id) => document.getElementById(id);
 // Null-safe static wiring: a renamed/missing button id must skip itself,
-// never abort the rest of console init.
+// never abort the rest of console init. Wrapped with busy feedback: the
+// button disables (wait cursor) while its async op runs — no silent clicks,
+// no double-submits.
+async function withBusy(btn, fn) {
+  if (btn && btn.disabled) return;
+  try { if (btn) btn.disabled = true; await fn(); }
+  finally { try { if (btn) btn.disabled = false; } catch {} }
+}
 function wire(id, fn) {
   const el = $(id);
-  if (el) el.onclick = fn;
+  if (el) el.onclick = (e) => withBusy(e?.currentTarget || el, () => fn(e));
   else console.warn(`[console] missing element #${id} — wiring skipped`);
 }
 
@@ -50,6 +57,33 @@ async function getStore() {
   return { chats: r.wb_chats || {}, logs: r.wb_logs || {}, global: r.wb_global || {}, subbots: r.wb_subbots || {} };
 }
 async function setChats(chats) { await chrome.storage.local.set({ wb_chats: chats }); }
+// Stepper states: the nav shows live progress so the operator sees what's
+// left without scrolling through all five sections.
+let waOk = false;
+function paintSteps(store) {
+  try {
+    const chats = Object.values(store?.chats || {});
+    const logs = store?.logs || {};
+    const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+    set('nav1', `01 Connect${waOk ? ' ✓' : ''}`);
+    set('nav2', `02 Context (${chats.filter((c) => c.contextMd).length}/${chats.length})`);
+    set('nav3', `03 Rules (${chats.filter((c) => c.allowed).length}/${chats.length} allowed)`);
+    const dev = store?.global?.device || {};
+    set('nav4', `04 Device${dev.lastSeen && (dev.agents || []).some((a) => a.installed) ? ' ✓' : ''}`);
+    set('nav5', `05 Logs (${Object.values(logs).reduce((m, a) => m + (a || []).length, 0)})`);
+  } catch {}
+}
+// Collapsed-card memory (local UI state, not synced): cards needing attention
+// (no instruction yet) open by default, the rest start collapsed.
+function readOpenIds() {
+  try {
+    const v = JSON.parse(localStorage.getItem('wb_ruleopen') || '[]');
+    return new Set(Array.isArray(v) ? v : []);
+  } catch { return new Set(); }
+}
+function writeOpenIds(set) {
+  try { localStorage.setItem('wb_ruleopen', JSON.stringify([...set])); } catch {}
+}
 // Read-modify-write a single chat: parallel edits from different cards must
 // never clobber each other with stale objects.
 async function mutateChat(id, fn) {
@@ -63,9 +97,11 @@ wire('ping', async () => {
   try {
     const r = await sendToWA('PING');
     const ok = !!r?.loaded;
+    waOk = ok;
     setWa(ok, ok ? `WhatsApp: ${r.chat?.chatName || 'loaded'}` : 'WhatsApp: injected, not loaded');
     setStatus($('conn'), ok ? `Connected. Active: ${r.chat?.chatName || '—'}` : 'Extension injected but WA not loaded yet.', ok ? 'ok' : '');
-  } catch (e) { setWa(false, 'WhatsApp: unreachable'); setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
+    try { paintSteps(await getStore()); } catch {}
+  } catch (e) { waOk = false; setWa(false, 'WhatsApp: unreachable'); setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
 });
 
 wire('checkLayout', async () => {
@@ -103,7 +139,7 @@ wire('list', async () => {
       };
       div.appendChild(b);
     });
-    if (!r.chats?.length) setStatus($('conn'), 'No chats found — is WA loaded?', 'err');
+    if (!r.chats?.length) setStatus($('conn'), 'No chats found — is WA loaded? Open a conversation in WhatsApp, then press List chats again.', 'err');
   } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
 });
 
@@ -219,7 +255,7 @@ async function flushPendingSaves() {
 }
 
 async function renderRules() {
-  const { chats, logs, subbots } = await getStore();
+  const { chats, logs, subbots, global } = await getStore();
   const wrap = $('rules'); wrap.innerHTML = '';
   const sel = $('viewChat');
   const keepView = sel.value || '';
@@ -234,7 +270,8 @@ async function renderRules() {
     const d = document.createElement('div');
     d.className = 'rule';
     d.innerHTML = `
-      <div class="rule-head">
+      <div class="rule-head" data-k="head" title="Click to expand/collapse">
+        <span class="rulechev">›</span>
         <span class="avatar">${esc(initial)}</span>
         <strong>${esc(c.name)}</strong>
         <span class="badge">${esc(id)}</span>
@@ -245,6 +282,7 @@ async function renderRules() {
         ${c.managedBy && subbots[c.managedBy] ? `<span class="badge" data-k="managed" title="Runs: ${subbots[c.managedBy].runCount}">subbot: ${esc(subbots[c.managedBy].name)} · ${esc(subbots[c.managedBy].status)}</span>` : c.managedBy ? '<span class="badge warn" data-k="managed">subbot gone — unlink me</span>' : ''}
         <label class="switch" style="margin-left:auto" title="Allowed"><input type="checkbox" data-k="allowed" ${c.allowed ? 'checked' : ''}><span class="track"></span></label>
       </div>
+      <div class="rule-body">
       <div class="rule-grid">
         <label class="field"><span>Reply mode</span>
           <select data-k="mode">
@@ -275,8 +313,22 @@ async function renderRules() {
         <button class="btn sm" data-k="open"><svg class="icon"><use href="#i-chat"/></svg>Open</button>
         <button class="btn sm" data-k="build"><svg class="icon"><use href="#i-scan"/></svg>Build</button>
         ${c.managedBy ? '<button class="btn sm" data-k="unlink"><svg class="icon"><use href="#i-x"/></svg>Unlink subbot</button>' : ''}
-        <button class="btn sm" data-k="del"><svg class="icon"><use href="#i-x"/></svg>Delete</button>
+        <button class="btn sm danger" data-k="del"><svg class="icon"><use href="#i-x"/></svg>Delete</button>
+      </div>
       </div>`;
+    // Collapsible card: head toggles (clicks on the Allowed switch exempt).
+    // Cards needing attention start open; the rest start collapsed.
+    const openIds = readOpenIds();
+    const needsAttention = !c.instruction?.trim();
+    if (needsAttention) openIds.add(id);
+    const applyOpen = () => d.classList.toggle('closed', !openIds.has(id));
+    applyOpen();
+    d.querySelector('[data-k=head]').onclick = (e) => {
+      if (e.target.closest('input,label.switch')) return;
+      if (openIds.has(id)) openIds.delete(id); else openIds.add(id);
+      writeOpenIds(openIds);
+      applyOpen();
+    };
     const ta = d.querySelector('[data-k=instruction]');
     const sv = d.querySelector('[data-k=savestate]');
     const say = (msg, kind = '') => { sv.textContent = msg; sv.classList.remove('ok', 'err'); if (kind) sv.classList.add(kind); };
@@ -364,8 +416,32 @@ async function renderRules() {
     };
     wrap.appendChild(d);
   }
-  if (!Object.keys(chats).length) wrap.innerHTML = '<div class="hint">No chats yet — List chats, then Add.</div>';
+  if (!Object.keys(chats).length) wrap.innerHTML = '<div class="hint">No chats yet — press List chats above, open one, then Add it here with an instruction.</div>';
+  paintSteps({ chats, logs, global });
 }
+
+wire('bulkAllow', async () => {
+  try {
+    await flushPendingSaves();
+    const { chats } = await getStore();
+    for (const c of Object.values(chats)) c.allowed = true;
+    await setChats(chats);
+    await renderRules();
+    setStatus($('conn'), 'All chats allowed. Write instructions where missing (open cards).', 'ok');
+  } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
+});
+wire('bulkBuild', async () => { try { $('buildAll')?.click(); } catch (e) { setStatus($('buildStatus'), 'Failed: ' + e.message, 'err'); } });
+wire('bulkExpand', async () => {
+  try {
+    const { chats } = await getStore();
+    writeOpenIds(new Set(Object.keys(chats)));
+    await renderRules();
+  } catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
+});
+wire('bulkCollapse', async () => {
+  try { writeOpenIds(new Set()); await renderRules(); }
+  catch (e) { setStatus($('conn'), 'Failed: ' + e.message, 'err'); }
+});
 
 wire('refreshView', async () => {
   const id = $('viewChat').value;
@@ -376,8 +452,14 @@ wire('refreshView', async () => {
     const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id, chatName });
     if (!r?.ok) throw new Error(r?.error || 'export failed');
     const md = r.chat?.contextMd || '(no context yet — run Build)';
-    const n = (r.logs || []).length;
-    const tail = (r.logs || []).slice(-60).map((m) => `[${m.dir}${m.sessionId ? ' ' + m.sessionId : ''}] ${m.sender || ''}: ${m.text}`).join('\n');
+    const dirF = $('logDir')?.value || '';
+    const q = ($('logQ')?.value || '').trim().toLowerCase();
+    let entries = r.logs || [];
+    if (dirF) entries = entries.filter((m) => m.dir === dirF);
+    if (q) entries = entries.filter((m) => `${m.sender || ''} ${m.text || ''}`.toLowerCase().includes(q));
+    const n = entries.length;
+    const filt = (dirF || q) ? ' (filtered)' : '';
+    const tail = entries.slice(-60).map((m) => `[${m.dir}${m.sessionId ? ' ' + m.sessionId : ''}] ${m.sender || ''}: ${m.text}`).join('\n') || '(no entries match)';
     const sl = $('sessList'); sl.innerHTML = '';
     (r.sessions || []).slice().reverse().forEach((s) => {
       const d = document.createElement('div');
@@ -390,7 +472,7 @@ wire('refreshView', async () => {
       d.appendChild(dot); d.appendChild(t); sl.appendChild(d);
     });
     if (!(r.sessions || []).length) sl.innerHTML = '<div class="hint">No sessions yet — the first AI reply opens one.</div>';
-    $('viewer').textContent = `# ${r.chat?.name || chatName} — context\nupdated: ${r.chat?.contextUpdatedAt ? new Date(r.chat.contextUpdatedAt).toLocaleString() : '-'}\n\n${md}\n\n---\n## last 60/${n} logged\n${tail}`;
+    $('viewer').textContent = `# ${r.chat?.name || chatName} — context\nupdated: ${r.chat?.contextUpdatedAt ? new Date(r.chat.contextUpdatedAt).toLocaleString() : '-'}\n\n${md}\n\n---\n## last ${Math.min(60, n)}/${(r.logs || []).length} logged${filt}\n${tail}`;
   } catch (e) { $('viewer').textContent = 'Failed: ' + e.message; }
 });
 

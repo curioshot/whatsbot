@@ -790,6 +790,7 @@
       if (!anchor || !anchor.parentNode) return;
       const row = document.createElement('div');
       row.className = 'wb-suggest-row';
+      row.dataset.theme = dockTheme();
       row.setAttribute('role', 'group');
       row.setAttribute('aria-label', 'WhatsBot suggested replies');
       for (const s of suggestions.slice(0, 3)) {
@@ -833,6 +834,34 @@
       anchor.parentNode.insertBefore(row, anchor.nextSibling);
     } catch { try { clearSuggestRow(); } catch {} }
   }
+  // Current theme for page-level elements (chips live outside the dock,
+  // so they can't inherit #whatsbot-dock[data-theme] from CSS).
+  function dockTheme() {
+    try {
+      const t = document.getElementById('whatsbot-dock')?.dataset.theme;
+      if (t === 'light' || t === 'dark') return t;
+      return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    } catch { return 'dark'; }
+  }
+  // Loading shimmer while the preview generates: users can tell "working"
+  // from "off". Replaced by chips, or cleared on failure/dismiss/switch.
+  function renderSuggestLoading() {
+    try {
+      clearSuggestRow();
+      const anchor = suggestAnchor();
+      if (!anchor || !anchor.parentNode) return;
+      const row = document.createElement('div');
+      row.className = 'wb-suggest-row loading';
+      row.dataset.theme = dockTheme();
+      row.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 2; i++) {
+        const b = document.createElement('span');
+        b.className = 'wb-sug-chip shim';
+        row.appendChild(b);
+      }
+      anchor.parentNode.insertBefore(row, anchor.nextSibling);
+    } catch {}
+  }
   function triggerSuggest(chatId, chatName, msgs, prime = false) {
     try {
       const incoming = (msgs || []).filter((m) => m.dir === 'in');
@@ -841,6 +870,7 @@
       // Chat switched (prime) or dismissed/new anchor → reset timer state.
       if (prime) {
         if (suggestTimer) { clearTimeout(suggestTimer); suggestTimer = null; }
+        clearSuggestRow();
       }
       if (!suggestEnabledFor(chatId)) { clearSuggestRow(); return; }
       const rule = getRule(chatId);
@@ -854,6 +884,7 @@
       if (suggestTimer) clearTimeout(suggestTimer);
       const history = msgs.slice(-(storeCache.global.historyLimit ?? 30));
       const fresh = incoming.slice(-3);
+      renderSuggestLoading();
       suggestTimer = setTimeout(async () => {
         suggestTimer = null;
         try {
@@ -1303,13 +1334,13 @@
     list.textContent = '';
     const active = dockSubbots.filter((b) => b.status === 'running' || b.status === 'paused').slice(0, 5);
     const hist = dockSubbots.filter((b) => b.status !== 'running' && b.status !== 'paused').slice(0, 5);
-    const mkBtn = (parent, label, fn, primary = false) => {
-      const b = document.createElement('button');
-      b.className = 'wb-mini' + (primary ? ' primary' : '');
-      b.textContent = label;
-      b.onclick = fn;
-      parent.appendChild(b);
-    };
+      const mkBtn = (parent, label, fn, primary = false, danger = false) => {
+        const b = document.createElement('button');
+        b.className = 'wb-mini' + (primary ? ' primary' : '') + (danger ? ' danger' : '');
+        b.textContent = label;
+        b.onclick = fn;
+        parent.appendChild(b);
+      };
     const card = (b) => {
       const card = document.createElement('div');
       card.className = 'wb-botcard';
@@ -1351,7 +1382,7 @@
           } catch (e) { paintResult(`RE-RUN FAILED: ${String(e.message || e)}`); }
         });
       }
-      mkBtn(btns, 'Delete', () => op('delete', 'SUBBOT_OP', { op: 'delete' }));
+      mkBtn(btns, 'Delete', () => op('delete', 'SUBBOT_OP', { op: 'delete' }), false, true);
       card.appendChild(btns);
       return card;
     };
@@ -1497,18 +1528,32 @@
   }
 
   function wireDockBots(dock) {
-    const toggle = dock.querySelector('#wb-bots-toggle');
-    const sec = dock.querySelector('#wb-subsec');
-    let open = false;
-    try { open = localStorage.getItem('wb_subsec') === '1'; } catch {}
-    const apply = () => {
-      sec.hidden = !open;
-      toggle.classList.toggle('open', open);
-      try { toggle.setAttribute('aria-expanded', String(open)); } catch {}
-      if (open) refreshDockBots();
+    // Reply/Bots tabs (remembered). The old collapsed toggle is gone: bots
+    // get equal footing instead of hiding at the bottom.
+    const show = (which) => {
+      const bots = which === 'bots';
+      const paneR = dock.querySelector('#wb-pane-reply');
+      const paneB = dock.querySelector('#wb-pane-bots');
+      const tabR = dock.querySelector('#wb-tab-reply');
+      const tabB = dock.querySelector('#wb-tab-bots');
+      if (paneR) paneR.hidden = bots;
+      if (paneB) paneB.hidden = !bots;
+      tabR?.classList.toggle('active', !bots);
+      tabB?.classList.toggle('active', bots);
+      try { tabR?.setAttribute('aria-selected', String(!bots)); } catch {}
+      try { tabB?.setAttribute('aria-selected', String(bots)); } catch {}
+      try { localStorage.setItem('wb_docktab', which); } catch {}
+      if (bots) refreshDockBots();
     };
-    toggle.onclick = () => { open = !open; try { localStorage.setItem('wb_subsec', open ? '1' : '0'); } catch {} apply(); };
-    apply();
+    const tabR = dock.querySelector('#wb-tab-reply');
+    const tabB = dock.querySelector('#wb-tab-bots');
+    if (tabR) tabR.onclick = () => show('reply');
+    if (tabB) tabB.onclick = () => show('bots');
+    let init = 'reply';
+    try { if (localStorage.getItem('wb_docktab') === 'bots') init = 'bots'; } catch {}
+    // Migrate the old collapsed-section preference: previously-open → Bots tab.
+    try { if (localStorage.getItem('wb_subsec') === '1') { init = 'bots'; localStorage.removeItem('wb_subsec'); } } catch {}
+    show(init);
     dock.querySelector('#wb-subrun').onclick = () => dockSubRun();
     const subnew = dock.querySelector('#wb-subnew');
     wireHistory(subnew);
@@ -1642,9 +1687,8 @@
 
   function openDockSubsec() {
     try {
-      const sec = document.querySelector('#wb-subsec');
-      const toggle = document.querySelector('#wb-bots-toggle');
-      if (sec && sec.hidden) { toggle?.click(); }
+      const pane = document.querySelector('#wb-pane-bots');
+      if (pane && pane.hidden) document.querySelector('#wb-tab-bots')?.click();
       const panel = document.getElementById('whatsbot-panel');
       if (panel?.hidden) document.querySelector('#wb-fab')?.click();
     } catch {}
@@ -1666,8 +1710,13 @@
         ['Enable the bot (extension icon switch)', !!g.enabled],
       ];
       const allDone = steps.every(([, d]) => d);
+      const doneN = steps.filter(([, d]) => d).length;
       box.hidden = !!g.onboarded || allDone;
       if (box.hidden) return;
+      const count = box.querySelector('#wb-obcount');
+      if (count) count.textContent = `${doneN}/${steps.length}`;
+      const fill = box.querySelector('#wb-ofill');
+      if (fill) fill.style.width = `${Math.round((doneN / steps.length) * 100)}%`;
       const wrap = box.querySelector('#wb-steps');
       wrap.textContent = '';
       for (const [label, done] of steps) {
@@ -1682,6 +1731,7 @@
   }
 
   // ---------- floating UI (FAB + dock card, SVG, light/dark) ----------
+  let badgeTimer = null;
   function updateBadge(chatName, text, kind = '') {
     if (!floatingPanel) return;
     const b = floatingPanel.querySelector('.wb-status');
@@ -1695,12 +1745,22 @@
     if (ring) {
       ring.className = 'wb-ring' + (kind ? ' ' + kind : (storeCache.global.enabled ? ' ok' : ''));
     }
+    // Single status source: the thinking pill owns live state. The badge
+    // keeps errors until the next action; transient notes fall back to idle
+    // (never while a job is still running).
+    try { if (badgeTimer) clearTimeout(badgeTimer); } catch {}
+    badgeTimer = null;
+    if (b && kind !== 'err') {
+      badgeTimer = setTimeout(() => {
+        try { if (floatingPanel && !think.active) b.textContent = `${chatName}: idle`; } catch {}
+      }, kind === 'ok' ? 5000 : 8000);
+    }
   }
 
   // Every element id the wiring/feedback below depends on. A dock missing
   // ANY of these is stale (built by older code) and must be rebuilt — a
   // half-wired dock renders but silently does nothing.
-  const DOCK_IDS = ['#wb-think', '#wb-thinktxt', '#wb-elapsed', '#wb-detail', '#wb-quote', '#wb-tsteps', '#wb-brain', '#wb-scan', '#wb-dom', '#wb-session', '#wb-rlabel', '#wb-sent', '#wb-result', '#wb-task', '#wb-go', '#wb-subsec', '#wb-bots-toggle', '#wb-bots-sum', '#wb-subnew', '#wb-subrun', '#wb-subconfirm', '#wb-sublist', '#wb-panic', '#wb-dismiss', '#wb-onboard', '#wb-steps', '#wb-reply', '#wb-build', '#wb-fab', '#wb-hide', '#wb-drag', '#wb-ver', '#wb-count', '.wb-status'];
+  const DOCK_IDS = ['#wb-think', '#wb-thinktxt', '#wb-elapsed', '#wb-detail', '#wb-quote', '#wb-tsteps', '#wb-brain', '#wb-scan', '#wb-dom', '#wb-session', '#wb-rlabel', '#wb-sent', '#wb-result', '#wb-task', '#wb-go', '#wb-tab-reply', '#wb-tab-bots', '#wb-pane-reply', '#wb-pane-bots', '#wb-subsec', '#wb-bots-sum', '#wb-subnew', '#wb-subrun', '#wb-subconfirm', '#wb-sublist', '#wb-panic', '#wb-dismiss', '#wb-onboard', '#wb-obcount', '#wb-ofill', '#wb-steps', '#wb-reply', '#wb-build', '#wb-fab', '#wb-hide', '#wb-drag', '#wb-ver', '#wb-count', '.wb-status'];
   function injectPanel() {
     const old = document.getElementById('whatsbot-dock');
     if (old) {
@@ -1723,10 +1783,16 @@
         </div>
         <div class="wb-status" role="status" aria-live="polite">waiting for WhatsApp…</div>
         <div class="wb-onboard" id="wb-onboard" hidden>
-          <div class="wb-dsec">Setup checklist</div>
+          <div class="wb-dsec">Setup <span id="wb-obcount">0/5</span></div>
+          <div class="wb-obar"><div class="wb-ofill" id="wb-ofill"></div></div>
           <div id="wb-steps"></div>
           <div class="wb-subrow"><button class="wb-mini" id="wb-dismiss">Dismiss</button></div>
         </div>
+        <div class="wb-tabs" role="tablist">
+          <button class="wb-tab active" id="wb-tab-reply" role="tab" aria-selected="true">Reply</button>
+          <button class="wb-tab" id="wb-tab-bots" role="tab" aria-selected="false">Bots&nbsp;<span id="wb-bots-sum">off</span></button>
+        </div>
+        <div id="wb-pane-reply">
         <button class="wb-think" id="wb-think" title="Show thinking details" hidden>
           <span class="wb-spinner"></span><span id="wb-thinktxt">thinking…</span><span id="wb-elapsed">0s</span>
         </button>
@@ -1756,18 +1822,16 @@
           <input id="wb-task" dir="auto" placeholder='Task, or /reply /build /auto /newbot /report /msg /stop' maxlength="500">
           <button class="wb-go" id="wb-go" title="Run task"><svg class="wb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0l-5-5m5 5l-5 5"/></svg></button>
         </div>
-        <button class="wb-bots-toggle" id="wb-bots-toggle" title="Subbots">
-          <svg class="wb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="5"/><circle cx="9" cy="13" r="1" fill="currentColor"/><circle cx="15" cy="13" r="1" fill="currentColor"/></svg>
-          <span>Bots</span><span id="wb-bots-sum">off</span>
-          <svg class="wb-icon wb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-        </button>
-        <div class="wb-subsec" id="wb-subsec" hidden>
+        </div>
+        <div id="wb-pane-bots" hidden>
+        <div class="wb-subsec" id="wb-subsec">
           <div class="wb-subrow">
             <input id="wb-subnew" dir="auto" placeholder="New bot: respond to … / list …" maxlength="300">
             <button class="wb-mini primary" id="wb-subrun">Run</button>
           </div>
           <div id="wb-subconfirm"></div>
           <div id="wb-sublist"></div>
+        </div>
         </div>
       </div>
       <button id="wb-fab" title="WhatsBot — toggle panel" aria-label="Toggle WhatsBot panel" aria-expanded="true">

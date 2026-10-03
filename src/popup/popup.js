@@ -8,10 +8,22 @@ const esc = (s) => String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt
 const numOr = (v, fb) => { const n = parseInt(String(v).trim(), 10); return Number.isFinite(n) && n >= 0 ? n : fb; };
 let state = { global: { ...DEFAULT_GLOBAL }, providers: defaultProvidersState() };
 
-function setStatus(el, msg, kind = '') {
+function setStatus(el, msg, kind = '', action) {
+  if (!el) return;
   el.textContent = msg;
   el.classList.remove('ok', 'err');
   if (kind) el.classList.add(kind);
+  const addBtn = (label, fn, primary) => {
+    const b = document.createElement('button');
+    b.className = 'btn sm' + (primary ? ' primary' : '');
+    b.style.marginLeft = '8px';
+    b.textContent = label;
+    b.onclick = () => { try { fn && fn(); } catch {} };
+    el.appendChild(b);
+  };
+  // Dismissible errors: an × clears the banner without touching settings.
+  if (kind === 'err') addBtn('×', () => { el.textContent = ''; el.classList.remove('ok', 'err'); });
+  if (action && action.label) addBtn(action.label, action.fn, true);
 }
 
 async function load() {
@@ -45,6 +57,10 @@ async function load() {
   renderProvFields();
   renderDevice();
   paintNet();
+  try {
+    const u = await chrome.storage.local.get(['wb_ui']);
+    if (u.wb_ui?.tab && $(u.wb_ui.tab)) showTab(u.wb_ui.tab, false);
+  } catch {}
 }
 
 function paintNet() {
@@ -58,11 +74,37 @@ function renderDevice() {
   const dot = $('devDot');
   const agents = d.agents || [];
   const n = agents.filter((a) => a.installed).length;
-  dot.className = 'dot' + (d.lastSeen && n ? ' ok' : '');
+  const connected = !!(d.lastSeen && n);
+  dot.className = 'dot' + (connected ? ' ok' : '');
   dot.title = d.lastSeen ? `${n}/${agents.length} agents` : 'not connected';
   $('devAgents').innerHTML = agents.length
     ? agents.map((a) => `<div class="agentrow"><span class="dot ${a.installed ? 'ok' : ''}"></span><strong>${esc(a.id)}</strong><span class="hint" style="margin:0">${esc(a.version || (a.installed ? 'installed' : 'missing'))}</span></div>`).join('')
     : '<div class="hint">Press Connect Device — needs bridge running.</div>';
+  // Connected state collapses credentials into a summary row (Edit to change).
+  const sum = $('devSummary');
+  const editing = !connected || $('devUrl')?.dataset.edit === '1';
+  for (const id of ['devUrl', 'devToken', 'routePrefix']) {
+    const inp = $(id)?.closest?.('.field');
+    if (inp) inp.hidden = !editing;
+  }
+  if (sum) {
+    sum.hidden = editing;
+    sum.textContent = connected && !editing
+      ? `Connected · ${n}/${agents.length} agents · ${d.defaultAgent || 'opencode'} answers all chats${d.useAsDefault ? '' : ' (per-chat brains only)'}`
+      : '';
+  }
+  const eb = $('devEdit');
+  if (eb) {
+    eb.hidden = editing;
+    eb.onclick = () => {
+      for (const id of ['devUrl', 'devToken', 'routePrefix']) {
+        const inp = $(id);
+        if (inp) { inp.dataset.edit = '1'; inp.closest?.('.field') && (inp.closest('.field').hidden = false); }
+      }
+      if (sum) sum.hidden = true;
+      eb.hidden = true;
+    };
+  }
 }
 
 function safePid() {
@@ -146,18 +188,23 @@ function renderCaps() {
   $('capsNote').textContent = `${model || '(no model)'}: ${srcNote}. ${botNote}`;
 }
 
-// tabs (null-safe: a renamed pane id must not kill the whole popup)
+// tabs (null-safe: a renamed pane id must not kill the whole popup).
+// The last open tab is remembered across popup opens (wb_ui, UI-only key).
 const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
+function showTab(pane, save = true) {
+  for (const [b] of TABS) $(b)?.classList.remove('active');
+  for (const [, p] of TABS) { const el = $(p); if (el) el.hidden = true; }
+  const btn = TABS.find(([, p]) => p === pane)?.[0];
+  if (btn) $(btn)?.classList.add('active');
+  const pel = $(pane);
+  if (pel) pel.hidden = false;
+  if (pane === 'paneBots') refreshSubbots();
+  if (save) { try { chrome.storage.local.set({ wb_ui: { tab: pane } }); } catch {} }
+}
 for (const [btn, pane] of TABS) {
   const be = $(btn), pe = $(pane);
   if (!be || !pe) continue;
-  be.addEventListener('click', () => {
-    for (const [b] of TABS) $(b)?.classList.remove('active');
-    for (const [, p] of TABS) { const el = $(p); if (el) el.hidden = true; }
-    be.classList.add('active');
-    pe.hidden = false;
-    if (pane === 'paneBots') refreshSubbots();
-  });
+  be.addEventListener('click', () => showTab(pane));
 }
 $('provider')?.addEventListener('change', renderProvFields);
 
@@ -342,8 +389,11 @@ $('devConnect').onclick = async () => {
     renderDevice();
     const n = (r.agents || []).filter((a) => a.installed).length;
     setStatus($('devStatus'), `Connected. ${n}/${r.agents.length} agents installed.`, 'ok');
+    // Collapse credentials back into the summary row after connecting.
+    for (const id of ['devUrl', 'devToken', 'routePrefix']) { try { delete $(id)?.dataset.edit; } catch {} }
+    renderDevice();
   } catch (e) {
-    setStatus($('devStatus'), 'Failed: ' + e.message, 'err');
+    setStatus($('devStatus'), 'Failed: ' + e.message, 'err', { label: 'Retry', fn: () => $('devConnect')?.click() });
   }
 };
 

@@ -70,6 +70,8 @@
     </div>
     <div id="devAgents"></div>
     <div id="devStatus" class="status"></div>
+    <div id="devSummary" class="hint"></div>
+    <button id="devEdit" class="btn sm" hidden>Edit connection</button>
   </section>
 
   <section id="paneBots" class="card float" hidden>
@@ -84,25 +86,35 @@
 
   <section id="panePolicy" class="card float" hidden>
     <h3><svg class="icon"><use href="#i-sliders"/></svg>Reply policy</h3>
-    <label class="field"><span>Global instruction (all chats)</span>
-      <textarea id="globalInstruction" rows="3" placeholder="Same language as sender. Max 3 lines."></textarea>
-    </label>
-    <div class="grid2">
-      <label class="field"><span>History msgs/reply</span><input type="text" id="historyLimit" inputmode="numeric" placeholder="30"></label>
-      <label class="field"><span>Ctx limit (0=auto)</span><input type="text" id="ctxLimit" inputmode="numeric" placeholder="0"></label>
-    </div>
-    <label class="field"><span>Log retention (days, 0=forever)</span><input type="text" id="logRetention" inputmode="numeric" placeholder="30"></label>
-    <div class="grid2">
-      <label class="field"><span>Suggestions (inline chips)</span>
-        <select id="suggestEnabled">
-          <option value="off">Off</option>
-          <option value="on">On</option>
-        </select>
+    <div class="card" style="margin:0 0 8px">
+      <h3>Replies</h3>
+      <label class="field"><span>Global instruction (all chats)</span>
+        <textarea id="globalInstruction" rows="3" placeholder="Same language as sender. Max 3 lines."></textarea>
       </label>
-      <label class="field"><span>Chips (2-3)</span><input type="text" id="suggestCount" inputmode="numeric" placeholder="3"></label>
+      <div class="grid2">
+        <label class="field"><span>History msgs/reply</span><input type="text" id="historyLimit" inputmode="numeric" placeholder="30"></label>
+        <label class="field"><span>Ctx limit (0=auto)</span><input type="text" id="ctxLimit" inputmode="numeric" placeholder="0"></label>
+      </div>
+      <div class="hint">History controls prompt size; context limit drives the session meter + auto-rollover.</div>
     </div>
-    <div class="hint">History controls prompt size; context limit drives the session meter + auto-rollover. Retention prunes old message logs on bulk saves. Suggestions show under the last incoming message — click inserts, never sends.</div>
-    <div class="hint">Privacy: every AI reply sends that chat's recent text + memory to your selected provider. Suggestions send the same preview text per incoming message. Device tasks run CLIs on your machine, inside the bridge allowlist only.</div>
+    <div class="card" style="margin:0 0 8px">
+      <h3>Memory &amp; chips</h3>
+      <label class="field"><span>Log retention (days, 0=forever)</span><input type="text" id="logRetention" inputmode="numeric" placeholder="30"></label>
+      <div class="grid2">
+        <label class="field"><span>Suggestions (inline chips)</span>
+          <select id="suggestEnabled">
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </label>
+        <label class="field"><span>Chips (2-3)</span><input type="text" id="suggestCount" inputmode="numeric" placeholder="3"></label>
+      </div>
+      <div class="hint">Retention prunes old message logs on bulk saves. Suggestions show under the last incoming message — click inserts, never sends.</div>
+    </div>
+    <details>
+      <summary class="hint">Privacy details</summary>
+      <div class="hint">Every AI reply sends that chat's recent text + memory to your selected provider. Suggestions send the same preview text per incoming message. Device tasks run CLIs on your machine, inside the bridge allowlist only.</div>
+    </details>
     <button id="save" class="btn primary block"><svg class="icon"><use href="#i-save"/></svg>Save all settings</button>
   </section>
 </div>
