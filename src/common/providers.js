@@ -1,4 +1,4 @@
-// Shared provider defaults (imported by background / popup / sidepanel as ES module)
+// Shared provider defaults (imported by background / popup as ES module)
 export const PROVIDERS = {
   openai: {
     label: 'OpenAI',

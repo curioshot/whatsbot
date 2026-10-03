@@ -129,7 +129,7 @@ function renderDeviceChoice() {
       <select id="f-agent">${opts}</select>
     </label>
     <label class="field"><span style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-usedef" ${d.useAsDefault ? 'checked' : ''} style="width:auto"> Answer all chats with this agent</span></label>
-    <div class="hint">Chats with an explicit Brain (Console → Rules) keep theirs. Needs the bridge running + token in the Device tab. Summaries and chips still use your last cloud provider.</div>
+    <div class="hint">Chats with an explicit Brain (Chats tab) keep theirs. Needs the bridge running + token in the Device tab. Summaries and chips still use your last cloud provider.</div>
     </div>`;
   $('modelCount').textContent = d.lastSeen ? `bridge seen ${new Date(d.lastSeen).toLocaleString()}` : 'bridge not connected yet — Device tab → Connect Device';
   $('f-agent').onchange = (e) => { state.global.device = { ...(state.global.device || {}), defaultAgent: e.target.value }; renderCaps(); };
@@ -192,7 +192,7 @@ function renderCaps() {
 
 // tabs (null-safe: a renamed pane id must not kill the whole popup).
 // The last open tab is remembered across popup opens (wb_ui, UI-only key).
-const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabChats', 'paneChats'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
+const TABS = [['tabModel', 'paneModel'], ['tabDevice', 'paneDevice'], ['tabChats', 'paneChats'], ['tabHistory', 'paneHistory'], ['tabBots', 'paneBots'], ['tabPolicy', 'panePolicy']];
 function showTab(pane, save = true) {
   for (const [b] of TABS) $(b)?.classList.remove('active');
   for (const [, p] of TABS) { const el = $(p); if (el) el.hidden = true; }
@@ -202,6 +202,7 @@ function showTab(pane, save = true) {
   if (pel) pel.hidden = false;
   if (pane === 'paneBots') refreshSubbots();
   if (pane === 'paneChats') renderChatRows().catch(() => {});
+  if (pane === 'paneHistory') renderHistory().catch(() => {});
   if (save) { try { chrome.storage.local.set({ wb_ui: { tab: pane } }); } catch {} }
 }
 for (const [btn, pane] of TABS) {
@@ -499,6 +500,23 @@ async function renderChatRows() {
     const save = document.createElement('button');
     save.className = 'btn sm primary';
     save.textContent = 'Save — teaches it';
+    const sg = document.createElement('select');
+    sg.title = 'Inline reply chips for this chat';
+    for (const [v, label] of [['global', 'chips: follow global'], ['on', 'chips: on'], ['off', 'chips: off']]) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = label;
+      if ((c.suggestMode || 'global') === v) o.selected = true;
+      sg.appendChild(o);
+    }
+    sg.onchange = async () => {
+      try {
+        const s = await chrome.storage.local.get(['wb_chats']);
+        const all = s.wb_chats || {};
+        if (!all[id]) throw new Error('Chat is gone — refresh.');
+        all[id].suggestMode = sg.value;
+        await chrome.storage.local.set({ wb_chats: all });
+      } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+    };
     const sst = document.createElement('span');
     sst.className = 'hint';
     sst.style.margin = '0';
@@ -525,8 +543,42 @@ async function renderChatRows() {
         sst.textContent = 'Saved.';
       } catch (e) { sst.textContent = 'Failed: ' + e.message; }
     };
-    row2.appendChild(save); row2.appendChild(sst);
-    card.appendChild(head); card.appendChild(mem); card.appendChild(ta); card.appendChild(row2);
+    row2.appendChild(sg); row2.appendChild(save); row2.appendChild(sst);
+    const adv = document.createElement('div');
+    adv.className = 'row';
+    adv.style.marginTop = '6px';
+    const brain = document.createElement('select');
+    brain.title = 'Brain: cloud reply or on-device agent';
+    for (const o of ['cloud', 'device:opencode', 'device:codex', 'device:claude', 'device:antigravity']) {
+      const opt = document.createElement('option');
+      opt.value = o; opt.textContent = o;
+      if ((c.routeTo || 'cloud') === o) opt.selected = true;
+      brain.appendChild(opt);
+    }
+    brain.onchange = async () => {
+      try {
+        const s = await chrome.storage.local.get(['wb_chats']);
+        const all = s.wb_chats || {};
+        if (!all[id]) throw new Error('Chat is gone — refresh.');
+        all[id].routeTo = brain.value;
+        await chrome.storage.local.set({ wb_chats: all });
+      } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+    };
+    const cwd = document.createElement('input');
+    cwd.placeholder = 'Work dir (device chats)';
+    cwd.style.flex = '1'; cwd.style.minWidth = '0';
+    cwd.value = c.cwd || '';
+    cwd.onchange = async () => {
+      try {
+        const s = await chrome.storage.local.get(['wb_chats']);
+        const all = s.wb_chats || {};
+        if (!all[id]) throw new Error('Chat is gone — refresh.');
+        all[id].cwd = cwd.value.trim();
+        await chrome.storage.local.set({ wb_chats: all });
+      } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+    };
+    adv.appendChild(brain); adv.appendChild(cwd);
+    card.appendChild(head); card.appendChild(mem); card.appendChild(ta); card.appendChild(row2); card.appendChild(adv);
     box.appendChild(card);
   }
 }
@@ -564,6 +616,116 @@ $('chatsAllowAll')?.addEventListener('click', async () => {
   } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
 });
 
+// ---------- History tab (past conversations, memory, sessions) ----------
+let histLast = null;
+async function renderHistory() {
+  const sel = $('histChat');
+  if (!sel) return;
+  const s = await chrome.storage.local.get(['wb_chats']);
+  const chats = s.wb_chats || {};
+  const keep = sel.value || '';
+  sel.innerHTML = '';
+  for (const [id, c] of Object.entries(chats)) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = c.name || id;
+    if (id === keep) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  if (!Object.keys(chats).length) {
+    $('histView').textContent = 'No chats yet — find some in the Chats tab first.';
+    return;
+  }
+  await loadHistory();
+}
+async function loadHistory() {
+  const id = $('histChat')?.value;
+  const view = $('histView');
+  if (!id) { if (view) view.textContent = '(no chat selected)'; return; }
+  try {
+    const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id });
+    if (!r?.ok) throw new Error(r?.error || 'export failed');
+    histLast = r;
+    const dirF = $('histDir')?.value || '';
+    const q = ($('histQ')?.value || '').trim().toLowerCase();
+    let entries = r.logs || [];
+    if (dirF) entries = entries.filter((m) => m.dir === dirF);
+    if (q) entries = entries.filter((m) => `${m.sender || ''} ${m.text || ''}`.toLowerCase().includes(q));
+    const sl = $('histSessions');
+    if (sl) {
+      sl.innerHTML = '';
+      for (const sess of (r.sessions || []).slice().reverse()) {
+        const d = document.createElement('div');
+        d.className = 'hint';
+        d.textContent = `#${sess.n ?? '—'} · ${sess.state} · ${sess.msgCount || 0} msgs · ctx ${sess.ctx || '?'}${sess.id === r.activeSessionId ? ' · current' : ''}`;
+        sl.appendChild(d);
+      }
+      if (!(r.sessions || []).length) sl.innerHTML = '<div class="hint">No sessions yet — the first reply opens one.</div>';
+    }
+    const md = r.chat?.contextMd || '(no memory yet — teach it in the Chats tab)';
+    const tail = entries.slice(-60).map((m) => `[${m.dir}] ${m.sender || ''}: ${m.text}`).join('\n') || '(no entries match)';
+    if (view) view.textContent = `${r.chat?.name || id}\n\n${md}\n\n---\nlast ${Math.min(60, entries.length)}/${(r.logs || []).length}${(dirF || q) ? ' (filtered)' : ''}\n${tail}`;
+  } catch (e) { if (view) view.textContent = 'Failed: ' + e.message; }
+}
+function downloadFile(filename, text, mime = 'text/plain') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+$('histRefresh')?.addEventListener('click', () => renderHistory().catch((e) => setStatus($('histStatus'), 'Failed: ' + e.message, 'err')));
+$('histDir')?.addEventListener('change', () => loadHistory().catch(() => {}));
+$('histQ')?.addEventListener('input', () => loadHistory().catch(() => {}));
+$('histNew')?.addEventListener('click', async () => {
+  try {
+    const id = $('histChat')?.value;
+    if (!id) return;
+    const r = await chrome.runtime.sendMessage({ type: 'NEW_SESSION', chatId: id });
+    if (!r?.ok) throw new Error(r?.error || 'failed');
+    await loadHistory();
+    setStatus($('histStatus'), 'New session opened.', 'ok');
+  } catch (e) { setStatus($('histStatus'), 'Failed: ' + e.message, 'err'); }
+});
+$('histMd')?.addEventListener('click', async () => {
+  try {
+    const id = $('histChat')?.value;
+    if (!id) return;
+    const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id });
+    if (!r?.ok) throw new Error(r?.error || 'export failed');
+    downloadFile(`${r.chat?.name || id}-context.md`, r.chat?.contextMd || '');
+  } catch (e) { setStatus($('histStatus'), 'Failed: ' + e.message, 'err'); }
+});
+$('histJson')?.addEventListener('click', async () => {
+  try {
+    const id = $('histChat')?.value;
+    if (!id) return;
+    const r = await chrome.runtime.sendMessage({ type: 'EXPORT_CHAT', chatId: id });
+    if (!r?.ok) throw new Error(r?.error || 'export failed');
+    downloadFile(`${r.chat?.name || id}-logs.json`, JSON.stringify(r.logs, null, 2), 'application/json');
+  } catch (e) { setStatus($('histStatus'), 'Failed: ' + e.message, 'err'); }
+});
+
+// ---------- Device bench (try an agent without touching any chat) ----------
+$('benchRun')?.addEventListener('click', async () => {
+  const btn = $('benchRun');
+  try {
+    if (btn) btn.disabled = true;
+    setStatus($('benchOut'), 'Running… (up to 3 min)');
+    const r = await chrome.runtime.sendMessage({
+      type: 'DEVICE_TASK',
+      agent: $('benchAgent')?.value || 'opencode',
+      prompt: $('benchPrompt')?.value || 'Reply with exactly: DEVICE-OK',
+      cwd: $('benchCwd')?.value.trim() || '',
+      timeoutMs: 180000,
+    });
+    // Bench runs have no chat, so the worker's chat gates don't apply —
+    // the sender allowlist still does (extension pages only).
+    setStatus($('benchOut'), r?.ok ? `Reply:\n${String(r.reply).slice(0, 1500)}` : 'Failed: ' + r?.error, r?.ok ? 'ok' : 'err');
+  } catch (e) { setStatus($('benchOut'), 'Failed: ' + e.message, 'err'); }
+  finally { try { if (btn) btn.disabled = false; } catch {} }
+});
+
 // ---------- subbots (status mirror — full control lives in the WhatsApp dock) ----------
 async function refreshSubbots() {
   try {
@@ -592,15 +754,8 @@ $('openDock').onclick = async () => {
 };
 
 $('openPanel').onclick = async () => {
-  // Resolve a real window id first: WINDOW_ID_CURRENT (-2) is rejected by
-  // sidePanel.open on some Chrome builds (uncaught error on Errors page).
-  try {
-    if (chrome.sidePanel) {
-      const w = await chrome.windows.getLastFocused();
-      if (w?.id != null) await chrome.sidePanel.open({ windowId: w.id });
-    }
-  } catch {}
-  chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/sidepanel.html') });
+  // The old sidepanel console is gone — its Chats live in the Chats tab now.
+  showTab('paneChats');
 };
 
 try {

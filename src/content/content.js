@@ -734,8 +734,8 @@
     // Background refused to generate (e.g. missing instruction): never send,
     // just tell the owner what to do. Returns true if it was a refusal.
     if (res?.code === 'NO_INSTRUCTION') {
-      updateBadge(chatName, 'blocked: add instruction first (Console → Rules)', 'warn');
-      paintResult(`BLOCKED — no instruction saved for this chat.\nFix: Console → Rules → write instruction → Save instruction.\nThen press AI Reply again.`);
+      updateBadge(chatName, 'blocked: teach it first (popup → Chats)', 'warn');
+      paintResult(`BLOCKED — no instruction saved for this chat.\nFix: popup → Chats → tell it how to behave → Save.\nThen press AI Reply again.`);
       return true;
     }
     if (res?.code === 'NO_DEVICE') {
@@ -745,7 +745,7 @@
     }
     if (res?.code === 'DISABLED') {
       updateBadge(chatName, 'bot off — reply skipped (see detail)', 'warn');
-      paintResult(`BLOCKED — ${res?.error || 'replies are disabled for this chat.'}\nFix: Console → Rules → Allow the chat, or enable the bot in the popup.`);
+      paintResult(`BLOCKED — ${res?.error || 'replies are disabled for this chat.'}\nFix: popup → Chats → tick the chat, or enable the bot in the popup.`);
       return true;
     }
     if (res?.code === 'FORBIDDEN') {
@@ -953,7 +953,7 @@
 
   function ruleSnapshot(chatId) {
     const r = getRule(chatId) || {};
-    return `Chat rule: replies ${r.allowed ? 'ON' : 'OFF'} · mode ${r.mode || '—'} · instruction ${r.instruction?.trim() ? 'set' : 'MISSING (Console → step 03 Rules)'} · brain ${r.routeTo || 'cloud'} · suggest ${(r.suggestMode || 'global')}`;
+    return `Chat rule: replies ${r.allowed ? 'ON' : 'OFF'} · mode ${r.mode || '—'} · instruction ${r.instruction?.trim() ? 'set' : 'MISSING (popup → Chats tab)'} · brain ${r.routeTo || 'cloud'} · suggest ${(r.suggestMode || 'global')}`;
   }
 
   // ---------- thinking view (popup detail inside WhatsApp) ----------
@@ -1235,7 +1235,7 @@
     }
   }
 
-  // ---------- messages from popup/sidepanel ----------
+  // ---------- messages from popup ----------
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       switch (msg.type) {
@@ -1750,7 +1750,7 @@
       const steps = [
         ['Open WhatsApp & scan QR', !!(window.WADOM && window.WADOM.isLoaded())],
         ['Add an API key (extension icon → Model)', hasKey],
-        ['Allow a chat + write its instruction (Console §3)', chats.some((c) => c.instruction?.trim())],
+        ['Tick a chat + teach it (extension icon → Chats)', chats.some((c) => c.instruction?.trim())],
         ['Build its context (dock Build button)', chats.some((c) => c.contextMd)],
         ['Enable the bot (extension icon switch)', !!g.enabled],
       ];

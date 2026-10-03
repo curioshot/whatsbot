@@ -1,4 +1,4 @@
-// Device bridge client (imported by background/popup/sidepanel).
+// Device bridge client (imported by background/popup).
 // Every call carries a timeout — a dead bridge must fail fast, never hang
 // the caller (especially the ephemeral service worker).
 export const DEVICE_AGENTS = ['opencode', 'codex', 'claude', 'antigravity'];

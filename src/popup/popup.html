@@ -26,6 +26,7 @@
     <button id="tabModel" class="active"><svg class="icon"><use href="#i-cpu"/></svg>Model</button>
     <button id="tabDevice"><svg class="icon"><use href="#i-plug"/></svg>Device</button>
     <button id="tabChats"><svg class="icon"><use href="#i-chat"/></svg>Chats</button>
+    <button id="tabHistory"><svg class="icon"><use href="#i-models"/></svg>History</button>
     <button id="tabBots"><svg class="icon"><use href="#i-bot"/></svg>Bots</button>
     <button id="tabPolicy"><svg class="icon"><use href="#i-sliders"/></svg>Policy</button>
   </nav>
@@ -73,6 +74,18 @@
     <div id="devStatus" class="status"></div>
     <div id="devSummary" class="hint"></div>
     <button id="devEdit" class="btn sm" hidden>Edit connection</button>
+    <div class="card" style="margin:8px 0 0">
+      <h3>Try an agent</h3>
+      <div class="row">
+        <select id="benchAgent"><option>opencode</option><option>codex</option><option>claude</option><option>antigravity</option></select>
+        <input id="benchCwd" placeholder="~/projects/app" style="flex:1;min-width:0">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="benchPrompt" placeholder="Ask it something small" style="flex:1;min-width:0">
+        <button id="benchRun" class="btn sm primary">Run</button>
+      </div>
+      <div id="benchOut" class="status"></div>
+    </div>
   </section>
 
   <section id="paneChats" class="card float" hidden>
@@ -84,6 +97,31 @@
     </div>
     <div id="chatsStatus" class="status"></div>
     <div id="chatRows"></div>
+  </section>
+
+  <section id="paneHistory" class="card float" hidden>
+    <h3><svg class="icon"><use href="#i-models"/></svg>History</h3>
+    <div class="hint">Past conversations, memory, and sessions per chat.</div>
+    <div class="row">
+      <select id="histChat" style="flex:1;min-width:0"></select>
+      <button id="histRefresh" class="btn sm"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="histDir" title="Filter direction">
+        <option value="">all</option>
+        <option value="in">incoming</option>
+        <option value="out">sent</option>
+      </select>
+      <input id="histQ" placeholder="Search…" style="flex:1;min-width:0">
+    </div>
+    <div class="row wrap" style="margin-top:8px">
+      <button id="histNew" class="btn sm">New session</button>
+      <button id="histMd" class="btn sm">Save MD</button>
+      <button id="histJson" class="btn sm">Save JSON</button>
+    </div>
+    <div id="histStatus" class="status"></div>
+    <div id="histSessions"></div>
+    <pre id="histView" class="viewer" style="white-space:pre-wrap"></pre>
   </section>
 
   <section id="paneBots" class="card float" hidden>

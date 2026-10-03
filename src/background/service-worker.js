@@ -643,7 +643,7 @@ on('GEN_REPLY', async (msg) => {
         // incoming so nothing is lost, but refuse to answer.
         if (!cfg.instruction?.trim()) {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
-          throw new WbError('NO_INSTRUCTION', `No instruction for "${msg.chatName}". Add one in Console → Rules before AI replies.`);
+          throw new WbError('NO_INSTRUCTION', `No instruction for "${msg.chatName}". Add one in popup → Chats before AI replies.`);
         }
         // Allowlist gate: paused/stopped chats and a disabled master switch
         // refuse here too. Content enforces this for its own auto-fire, but
@@ -652,7 +652,7 @@ on('GEN_REPLY', async (msg) => {
         const gateWatcher = runningWatchFor(store, msg.chatId);
         if (cfg.allowed === false && !gateWatcher) {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
-          throw new WbError('DISABLED', `AI replies are off for "${msg.chatName}". Allow the chat in Console → Rules first.`);
+          throw new WbError('DISABLED', `AI replies are off for "${msg.chatName}". Tick the chat in popup → Chats first.`);
         }
         if (global.enabled === false && !gateWatcher) {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
@@ -762,7 +762,7 @@ on('DEVICE_PROBE', async (msg) => {
 });
 
 on('DEVICE_TASK', async (msg, sender) => {
-        // msg: {agent, prompt, cwd, timeoutMs, chatId?, chatName?} — manual test / sidepanel send
+        // msg: {agent, prompt, cwd, timeoutMs, chatId?, chatName?} — manual test / popup bench send
         // Bench calls (no chat) are extension-pages-only: a compromised page
         // must not get free bridge execution. Chat-bound calls pass the same
         // allow/master gate as GEN_REPLY.
@@ -1173,7 +1173,7 @@ on('NEW_SESSION', async (msg) => {
 });
 
 on('EXPORT_CHAT', async (msg) => {
-        // build downloadable context.md / logs.json in sidepanel via data URL; here just return payload
+        // build downloadable context.md / logs.json in popup via data URL; here just return payload
         const store = await getStore();
         const rawChat = store.chats[msg.chatId];
         const chat = rawChat ? { ...rawChat, name: rawChat.name || msg.chatName || msg.chatId } : null;

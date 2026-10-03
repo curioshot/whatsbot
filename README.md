@@ -41,15 +41,15 @@ cd bridge && node bridge.mjs
 Then: popup → **Chats** → Find WhatsApp chats → tick the ones you want →
 tell each how to behave → **Save — teaches it** (learns past messages
 automatically) → enable bot in popup. The toolbar badge shows `ON` while
-the bot runs. (The old sidepanel Console still exists but is legacy —
-everything above lives in the popup now.)
+the bot runs. Setup is 3 steps: popup → **Chats** → Find WhatsApp chats →
+tick the ones you want → tell each how to behave → **Save — teaches it**.
 
 ## Everyday use
 
 - **Floating dock (in WhatsApp):** two tabs — **Reply** (AI Reply button, Build button, thinking view with quoted source, stages, session + context meter, sent receipt, and a **task box**) and **Bots** (watch/task launch, cards, history). Try `msg to krypton that i am going to his home` or `report unread`.
   Slash shortcuts: `/reply /build /auto /code /newbot /report /msg /stop /help`. The status line keeps errors until the next action; transient notes fade to idle. Setup progress (`n/5`) shows until everything is done.
-- **Suggestions (optional):** Popup → Policy → Suggestions On + Console §3 per-chat Suggest (follow global/on/off). When on and the chat has an instruction, 2-3 chips appear under the last incoming message in WhatsApp — a shimmer shows while they generate; click inserts into the box, never sends. `×` dismisses per message.
-- **Console:** stepper nav shows live counts (§1 connection · §2 contexts built · §3 rules allowed · §4 device · §5 logs). §3 rule cards collapse (attention-needed cards start open) with Allow-all / Build-all / Expand-all / Collapse-all; §5 filters logs by direction + text. Popup remembers its last tab; the Device tab collapses credentials into a summary row once connected.
+- **Suggestions (optional):** Popup → Policy → Suggestions On + Chats tab per-chat Suggest (follow global/on/off). When on and the chat has an instruction, 2-3 chips appear under the last incoming message in WhatsApp — a shimmer shows while they generate; click inserts into the box, never sends. `×` dismisses per message.
+- **Popup tabs:** Model/Brain · Device (connect + try an agent) · Chats (tick, teach, auto-learn) · History (memory, sessions, search, export) · Bots (status mirror) · Policy. The popup remembers its last tab; the Device tab collapses credentials into a summary row once connected.
 - **Auto-reply:** only in allowed chats in auto mode. The dock thinking pill
   and Last result line show every trigger and outcome.
 
@@ -79,7 +79,7 @@ concurrent watch bots; watch-bot replies are logged as `bot:<id>`
    in `bridge/whatsbot-bridge.service` for autostart).
 2. Popup → Bridge URL + token → Connect Device. Or skip this tab: popup →
    Brain list → "Device agent" answers everything through one agent.
-3. Console → per-chat brain (`cloud` or `device:*`) + work dir (must be in the
+3. Popup → **Chats** → per-chat brain (`cloud` or `device:*`) + work dir (must be in the
    `bridge/agents.json` allowlist; empty work dir falls back to the first
    allowlisted dir that exists). `/code …` forces device on any chat.
    Per-chat `device:*` always wins over the popup default. Summaries, chips,
@@ -94,7 +94,7 @@ WhatsApp Web page
 Extension
 ├─ background/service-worker.js — LLM calls · sessions · logs · subbots
 ├─ popup/ — keys, models, bridge, policy
-├─ sidepanel/ — console: chats, contexts, rules, bench, logs
+├─ popup/ — brain picker, chats, history, bots mirror, policy
 └─ common/ — providers · sessions · store (schema v4) · bus
 Local machine
 └─ bridge/bridge.mjs — 127.0.0.1 only, token auth, capped tasks
@@ -136,7 +136,7 @@ Local machine
   lifecycle, logs
 - `src/content/` — `whatsapp-dom.js` (all selectors — fix here when WA
   changes), `content.js` (reader/switcher/replier/observer/dock)
-- `src/popup/*`, `src/sidepanel/*`, `src/ui/*` (tokens/components/icons/theme)
+- `src/popup/*` (brain picker, chats, history, bots mirror, policy), `src/ui/*` (tokens/components/icons/theme)
 - `bridge/` — daemon, `agents.json`, systemd unit
 - `test/` — `node --test test/` (62 tests) + `node test/helpers/harness.mjs`
   (25 live slots, every background message type)
