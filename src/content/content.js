@@ -45,7 +45,15 @@
     } catch {}
   }
   chrome.storage.onChanged.addListener((chg) => {
-    if (chg['wb_global']) storeCache.global = chg['wb_global'].newValue || {};
+    if (chg['wb_global']) {
+      const was = !!chg['wb_global'].oldValue?.enabled;
+      storeCache.global = chg['wb_global'].newValue || {};
+      // Timestamp gate: the moment the bot is switched on, seed the seen
+      // set so backlog already on screen never auto-fires — only messages
+      // arriving after enable get answered. (Chat-switch primes cover the
+      // per-chat case; this covers enable-while-viewing.)
+      if (!was && storeCache.global.enabled) handleSnapshot(true).catch(() => {});
+    }
     if (chg['wb_chats']) storeCache.chats = chg['wb_chats'].newValue || {};
     if (chg['wb_subbots']) { storeCache.subbots = chg['wb_subbots'].newValue || {}; refreshDockBots(); }
     if (chg['wb_providers']) storeCache.hasKey = hasKeyMap(chg['wb_providers'].newValue, (chg['wb_global']?.newValue || storeCache.global).activeProvider);
@@ -708,6 +716,17 @@
       pendingIncoming.set(chatId, { chatId, chatName, msgs: fresh, history: msgs.slice(-(storeCache.global.historyLimit ?? 30)) });
       return;
     }
+    // Trigger word: when set, auto answers only messages starting with it.
+    // Anything else is logged quietly — manual AI Reply still works.
+    const tp = (storeCache.global.triggerPrefix || '').trim().toLowerCase();
+    if (tp && !fresh.some((m) => String(m.text || '').trim().toLowerCase().startsWith(tp))) {
+      try {
+        const lp = chrome.runtime.sendMessage({ type: 'LOG_INCOMING', chatId, messages: fresh });
+        if (lp && lp.catch) lp.catch(() => {});
+      } catch {}
+      updateBadge(chatName, `waiting for "${storeCache.global.triggerPrefix.trim()}"`);
+      return;
+    }
     // auto: debounce bursts
     const prev = pendingIncoming.get(chatId);
     if (prev?.timer) clearTimeout(prev.timer);
@@ -751,6 +770,11 @@
     if (res?.code === 'FORBIDDEN') {
       updateBadge(chatName, 'blocked: outside call (see detail)', 'err');
       paintResult(`BLOCKED — ${res?.error || 'this call did not come from the extension.'}\nNothing was sent. If you pressed a WhatsBot button, reload the tab.`);
+      return true;
+    }
+    if (res?.code === 'QUOTA') {
+      updateBadge(chatName, 'daily limit reached (see detail)', 'warn');
+      paintResult(`PAUSED — ${res?.error || 'daily reply limit reached.'}\nRaise it in popup → Policy, or wait until tomorrow.`);
       return true;
     }
     return false;

@@ -630,6 +630,28 @@ async function runSubbotTask(store, bot) {
   return bot;
 }
 
+// Spend guard helpers: daily reply budgets, per chat and total. Plain reply
+// counts (not tokens) so limits read naturally. 0 = unlimited.
+function quotaHit(global, chatId) {
+  const today = new Date().toDateString();
+  const use = global.dailyUse && global.dailyUse.date === today ? global.dailyUse : { total: 0, perChat: {} };
+  const chatN = use.perChat[chatId] || 0;
+  if (global.dailyChatCap > 0 && chatN >= global.dailyChatCap) return `${chatN} replies in this chat today (limit ${global.dailyChatCap})`;
+  if (global.dailyTotalCap > 0 && use.total >= global.dailyTotalCap) return `${use.total} replies today (limit ${global.dailyTotalCap})`;
+  return '';
+}
+async function bumpDailyUse(store, chatId) {
+  try {
+    const today = new Date().toDateString();
+    const g = store.global;
+    const use = g.dailyUse && g.dailyUse.date === today ? g.dailyUse : { date: today, total: 0, perChat: {} };
+    use.total++;
+    use.perChat[chatId] = (use.perChat[chatId] || 0) + 1;
+    g.dailyUse = use;
+    await setStore({ global: g });
+  } catch {}
+}
+
 // ---------- message router (bus registrations; thin wrapper at the bottom) ----------
 on('GEN_REPLY', async (msg) => {
         // msg: {chatId, chatName, history, newMessages}
@@ -657,6 +679,12 @@ on('GEN_REPLY', async (msg) => {
         if (global.enabled === false && !gateWatcher) {
           await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
           throw new WbError('DISABLED', 'The bot is disabled in the popup. Turn it on first.');
+        }
+        // Spend guard first (before the lock/LLM spend anything).
+        const over = quotaHit(global, msg.chatId);
+        if (over) {
+          await appendLogs(msg.chatId, (msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })), getActiveSession(store, msg.chatId)?.id);
+          throw new WbError('QUOTA', `Daily reply limit reached (${over}). Raise it in popup → Policy, or wait until tomorrow.`);
         }
         const lockToken = await acquireTurnLock(msg.chatId);
         if (!lockToken) {
@@ -712,6 +740,7 @@ on('GEN_REPLY', async (msg) => {
             ...(msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })),
             { ts: Date.now(), dir: 'out', sender: watch1 ? `bot:${watch1.id}` : kind, text: reply },
           ], info.id);
+          await bumpDailyUse(store, msg.chatId);
           return { reply, via: kind, session: info };
         }
         const { reply, info } = await executeReplyTurn(store, msg.chatId, msg.chatName, {
@@ -744,6 +773,7 @@ on('GEN_REPLY', async (msg) => {
           ...(msg.newMessages || []).map((m) => ({ ts: Date.now(), dir: 'in', sender: m.sender, text: m.text, msgId: m.msgId })),
           { ts: Date.now(), dir: 'out', sender: watch2 ? `bot:${watch2.id}` : 'bot', text: reply },
         ], info.id);
+        await bumpDailyUse(store, msg.chatId);
         return { reply, session: info };
         } finally {
           await releaseTurnLock(msg.chatId, lockToken);

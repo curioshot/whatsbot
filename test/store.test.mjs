@@ -21,6 +21,9 @@ test('migrateSnapshot backfills legacy store', () => {
   assert.equal(snapshot.wb_global.device.defaultAgent, 'opencode');
   assert.equal(snapshot.wb_global.device.useAsDefault, false);
   assert.equal(snapshot.wb_global.prevCloudProvider, 'openai');
+  assert.equal(snapshot.wb_global.dailyChatCap, 100);
+  assert.equal(snapshot.wb_global.dailyTotalCap, 1000);
+  assert.equal(snapshot.wb_global.triggerPrefix, '');
 });
 
 test('migrateSnapshot is idempotent on current schema', () => {

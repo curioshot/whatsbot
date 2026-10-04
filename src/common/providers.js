@@ -65,6 +65,14 @@ export const DEFAULT_GLOBAL = {
   // parses) use it when the active provider is 'device' — agents can't do
   // those. Stashed automatically; you never set it by hand.
   prevCloudProvider: 'openai',
+  // Spend guards: max AI replies per day, per chat and total. Plain reply
+  // counts (not tokens) so the limit reads naturally. 0 = unlimited.
+  dailyChatCap: 100,
+  dailyTotalCap: 1000,
+  dailyUse: { date: '', total: 0, perChat: {} },
+  // Trigger prefix: when set, auto-replies only fire for messages starting
+  // with it (manual AI Reply always works). Empty = always answer.
+  triggerPrefix: '',
 };
 
 export function defaultProvidersState() {

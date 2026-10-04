@@ -137,6 +137,11 @@ await t('DEVICE_TASK bench from tab refused', { type: 'DEVICE_TASK', agent: 'ope
   const maxN = rs.filter((r) => !r.ok && /Max 5/.test(r.error || '')).length;
   results.push([okN === 5 && maxN === 1 ? 'PASS' : 'FAIL', 'SUBBOT_CONFIRM concurrent cap', `ok=${okN} max-rejected=${maxN}`]);
 }
+store.wb_global.dailyChatCap = 1;
+store.wb_global.dailyUse = { date: '', total: 0, perChat: {} };
+await t('GEN_REPLY quota first ok', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'q1', msgId: 'q1' }] }, (r) => r.ok);
+await t('GEN_REPLY quota blocks second', { type: 'GEN_REPLY', chatId: 'name:tareq', chatName: 'Tareq', history: [], newMessages: [{ dir: 'in', sender: 'Tareq', text: 'q2', msgId: 'q2' }] }, (r) => !r.ok && r.code === 'QUOTA');
+store.wb_global.dailyChatCap = 0;
 
 let fail = 0;
 for (const [s, n, extra] of results) { console.log(s, '-', n, extra); if (s !== 'PASS') fail++; }

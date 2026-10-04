@@ -49,6 +49,14 @@ async function load() {
   $('historyLimit').value = state.global.historyLimit ?? DEFAULT_GLOBAL.historyLimit;
   $('ctxLimit').value = state.global.ctxLimitOverride ?? 0;
   try {
+    const dcc = $('dailyChatCap');
+    if (dcc) dcc.value = state.global.dailyChatCap ?? DEFAULT_GLOBAL.dailyChatCap;
+    const dtc = $('dailyTotalCap');
+    if (dtc) dtc.value = state.global.dailyTotalCap ?? DEFAULT_GLOBAL.dailyTotalCap;
+    const tp = $('triggerPrefix');
+    if (tp) tp.value = state.global.triggerPrefix || '';
+  } catch {}
+  try {
     const lr = $('logRetention');
     if (lr) lr.value = state.global.logRetentionDays ?? DEFAULT_GLOBAL.logRetentionDays;
     const se = $('suggestEnabled');
@@ -325,6 +333,18 @@ async function collectAndSave() {
   state.global.routePrefix = $('routePrefix').value.trim() || '/code';
   state.global.historyLimit = numOr($('historyLimit').value, DEFAULT_GLOBAL.historyLimit);
   state.global.ctxLimitOverride = numOr($('ctxLimit').value, 0);
+  const dcc = $('dailyChatCap');
+  if (dcc) {
+    const n = parseInt(String(dcc.value).trim(), 10);
+    state.global.dailyChatCap = Number.isFinite(n) && n >= 0 ? n : DEFAULT_GLOBAL.dailyChatCap;
+  }
+  const dtc = $('dailyTotalCap');
+  if (dtc) {
+    const n = parseInt(String(dtc.value).trim(), 10);
+    state.global.dailyTotalCap = Number.isFinite(n) && n >= 0 ? n : DEFAULT_GLOBAL.dailyTotalCap;
+  }
+  const tp = $('triggerPrefix');
+  if (tp) state.global.triggerPrefix = tp.value.trim().slice(0, 20);
   try {
     const el = $('logRetention');
     if (el) {

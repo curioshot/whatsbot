@@ -146,6 +146,12 @@
         <label class="field"><span>Ctx limit (0=auto)</span><input type="text" id="ctxLimit" inputmode="numeric" placeholder="0"></label>
       </div>
       <div class="hint">History controls prompt size; context limit drives the session meter + auto-rollover.</div>
+      <div class="grid2">
+        <label class="field"><span>Max replies/chat/day (0=off)</span><input type="text" id="dailyChatCap" inputmode="numeric" placeholder="100"></label>
+        <label class="field"><span>Max replies total/day (0=off)</span><input type="text" id="dailyTotalCap" inputmode="numeric" placeholder="1000"></label>
+      </div>
+      <label class="field"><span>Trigger word (empty = always answer)</span><input type="text" id="triggerPrefix" placeholder="e.g. @bot"></label>
+      <div class="hint">Budgets stop a noisy chat burning your API spend. Trigger word makes auto-reply wait for it — manual reply always works.</div>
     </div>
     <div class="card" style="margin:0 0 8px">
       <h3>Memory &amp; chips</h3>
