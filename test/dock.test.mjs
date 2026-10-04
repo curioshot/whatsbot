@@ -11,7 +11,7 @@ const src = fs.readFileSync(new URL('../src/content/content.js', import.meta.url
 // ids the wiring depends on (must exist in the template)
 const WIRED = ['wb-think', 'wb-thinktxt', 'wb-elapsed', 'wb-detail', 'wb-quote',
   'wb-tsteps', 'wb-brain', 'wb-scan', 'wb-dom', 'wb-session', 'wb-rlabel',
-  'wb-sent', 'wb-result', 'wb-task', 'wb-go', 'wb-tab-reply', 'wb-tab-bots',
+  'wb-sent', 'wb-result', 'wb-task', 'wb-go', 'wb-quicklist', 'wb-tab-reply', 'wb-tab-bots',
   'wb-pane-reply', 'wb-pane-bots', 'wb-subsec', 'wb-bots-sum', 'wb-subnew',
   'wb-subrun', 'wb-subconfirm', 'wb-sublist',
   'wb-panic', 'wb-dismiss', 'wb-onboard', 'wb-obcount', 'wb-ofill', 'wb-steps', 'wb-reply', 'wb-build',

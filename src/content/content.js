@@ -36,10 +36,11 @@
   }
   async function refreshStore() {
     try {
-      const r = await chrome.storage.local.get(['wb_global', 'wb_chats', 'wb_theme', 'wb_providers', 'wb_subbots']);
+      const r = await chrome.storage.local.get(['wb_global', 'wb_chats', 'wb_theme', 'wb_providers', 'wb_subbots', 'wb_quickreplies']);
       storeCache.global = r['wb_global'] || {};
       storeCache.chats = r['wb_chats'] || {};
       storeCache.subbots = r['wb_subbots'] || {};
+      storeCache.quick = r['wb_quickreplies'] || [];
       storeCache.hasKey = hasKeyMap(r['wb_providers'], storeCache.global.activeProvider);
       applyDockTheme(r['wb_theme'] || 'system');
     } catch {}
@@ -58,6 +59,7 @@
     if (chg['wb_subbots']) { storeCache.subbots = chg['wb_subbots'].newValue || {}; refreshDockBots(); }
     if (chg['wb_providers']) storeCache.hasKey = hasKeyMap(chg['wb_providers'].newValue, (chg['wb_global']?.newValue || storeCache.global).activeProvider);
     if (chg['wb_theme']) applyDockTheme(chg['wb_theme'].newValue || 'system');
+    if (chg['wb_quickreplies']) { storeCache.quick = chg['wb_quickreplies'].newValue || []; paintQuickRow(); }
     paintOnboarding();
   });
   function applyDockTheme(stored) {
@@ -640,6 +642,7 @@
           } catch {}
           try {
             clearSuggestRow();
+            paintQuickRow();
             suggestPendingMsg = '';
             if (suggestTimer) { clearTimeout(suggestTimer); suggestTimer = null; }
             // Cap dismissed set: chat hops accumulate ids forever otherwise.
@@ -1213,6 +1216,19 @@
     setThinkStage('generating', 'working on task…');
     updateBadge(chatName, 'working on task…', 'warn');
     try {
+      const qm = task.match(/^!(\S[\s\S]{0,40})$/);
+      if (qm) {
+        // Quick insert, skip the brain path.
+        const want = (qm[1] || '').trim().toLowerCase();
+        const vis = visibleSnippets(chatId);
+        const hit = vis.find((q) => String(q.title || '').trim().toLowerCase() === want)
+          || vis.find((q) => String(q.title || '').trim().toLowerCase().startsWith(want));
+        if (!hit) { updateBadge(chatName, `no quick reply named "${(qm[1] || '').trim()}"`, 'err'); return; }
+        const text = String(hit.text || '').replaceAll('{name}', (chatName || '').trim() || 'there');
+        if (insertSnippet(text)) { bumpSnippetUses(hit.id); updateBadge(chatName, 'inserted — press send', 'ok'); endTask('inserted', text); }
+        else updateBadge(chatName, 'no message box — open a chat first', 'err');
+        return;
+      }
       let plan = parseTaskLocal(task);
       if (!plan) {
         const names = listChats().slice(0, 40).map((c) => c.name);
@@ -1667,7 +1683,62 @@
     });
   }
 
-  // ---------- slash commands + task box ----------
+  // ---------- quick replies (user snippets, fully local) ----------
+  // Classic-script copy of the match rule in src/common/quickreplies.js
+  // (content scripts can't import ES modules — keep both identical).
+  function visibleSnippets(chatId) {
+    return (storeCache.quick || []).filter((q) => {
+      const scope = q?.chats || ['*'];
+      return scope.includes('*') || scope.includes(chatId);
+    }).sort((a, b) => (b.uses || 0) - (a.uses || 0));
+  }
+  function insertSnippet(text) {
+    try {
+      const composer = window.WADOM.composerEl();
+      if (!composer) return false;
+      composer.focus();
+      selectAll(composer);
+      cmdOk('delete', null);
+      try { composer.textContent = ''; } catch {}
+      typeInto(composer, text);
+      composer.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      composer.focus();
+      return true;
+    } catch { return false; }
+  }
+  async function bumpSnippetUses(id) {
+    try {
+      const r = await chrome.storage.local.get(['wb_quickreplies']);
+      const all = r.wb_quickreplies || [];
+      const hit = all.find((q) => q.id === id);
+      if (hit) { hit.uses = (hit.uses || 0) + 1; await chrome.storage.local.set({ wb_quickreplies: all }); }
+    } catch {}
+  }
+  function paintQuickRow() {
+    try {
+      const box = dockEl('#wb-quicklist');
+      if (!box) return;
+      const { chatId, chatName } = activeChatKey();
+      const vis = visibleSnippets(chatId).slice(0, 6);
+      box.textContent = '';
+      if (!vis.length) { box.hidden = true; return; }
+      box.hidden = false;
+      for (const q of vis) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'wb-mini';
+        b.textContent = q.title;
+        b.title = `Insert: ${String(q.text || '').slice(0, 120)}`;
+        b.onclick = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const text = String(q.text || '').replaceAll('{name}', (chatName || '').trim() || 'there');
+          if (insertSnippet(text)) { bumpSnippetUses(q.id); updateBadge(chatName, 'inserted — press send', 'ok'); }
+          else updateBadge(chatName, 'no message box — open a chat first', 'err');
+        };
+        box.appendChild(b);
+      }
+    } catch {}
+  }
   function wireTaskBox(dock) {
     const taskInput = dock.querySelector('#wb-task');
     const submitTask = () => {
@@ -1829,7 +1900,7 @@
   // Every element id the wiring/feedback below depends on. A dock missing
   // ANY of these is stale (built by older code) and must be rebuilt — a
   // half-wired dock renders but silently does nothing.
-  const DOCK_IDS = ['#wb-think', '#wb-thinktxt', '#wb-elapsed', '#wb-detail', '#wb-quote', '#wb-tsteps', '#wb-brain', '#wb-scan', '#wb-dom', '#wb-session', '#wb-rlabel', '#wb-sent', '#wb-result', '#wb-task', '#wb-go', '#wb-tab-reply', '#wb-tab-bots', '#wb-pane-reply', '#wb-pane-bots', '#wb-subsec', '#wb-bots-sum', '#wb-subnew', '#wb-subrun', '#wb-subconfirm', '#wb-sublist', '#wb-panic', '#wb-dismiss', '#wb-onboard', '#wb-obcount', '#wb-ofill', '#wb-steps', '#wb-reply', '#wb-build', '#wb-fab', '#wb-hide', '#wb-drag', '#wb-ver', '#wb-count', '.wb-status'];
+  const DOCK_IDS = ['#wb-think', '#wb-thinktxt', '#wb-elapsed', '#wb-detail', '#wb-quote', '#wb-tsteps', '#wb-brain', '#wb-scan', '#wb-dom', '#wb-session', '#wb-rlabel', '#wb-sent', '#wb-result', '#wb-task', '#wb-go', '#wb-quicklist', '#wb-tab-reply', '#wb-tab-bots', '#wb-pane-reply', '#wb-pane-bots', '#wb-subsec', '#wb-bots-sum', '#wb-subnew', '#wb-subrun', '#wb-subconfirm', '#wb-sublist', '#wb-panic', '#wb-dismiss', '#wb-onboard', '#wb-obcount', '#wb-ofill', '#wb-steps', '#wb-reply', '#wb-build', '#wb-fab', '#wb-hide', '#wb-drag', '#wb-ver', '#wb-count', '.wb-status'];
   function injectPanel() {
     const old = document.getElementById('whatsbot-dock');
     if (old) {
@@ -1891,6 +1962,7 @@
           <input id="wb-task" dir="auto" placeholder='Task, or /reply /build /auto /newbot /report /msg /stop' maxlength="500">
           <button class="wb-go" id="wb-go" title="Run task"><svg class="wb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m0 0l-5-5m5 5l-5 5"/></svg></button>
         </div>
+        <div id="wb-quicklist" hidden></div>
         </div>
         <div id="wb-pane-bots" hidden>
         <div class="wb-subsec" id="wb-subsec">
@@ -1984,6 +2056,7 @@
     wireDockBots(dock);
     wireTaskBox(dock);
     paintOnboarding();
+    paintQuickRow();
     refreshDockBots();
     // Follow OS theme while stored theme is 'system' (mirror ui/theme.js).
     try {

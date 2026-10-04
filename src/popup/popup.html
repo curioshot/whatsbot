@@ -97,6 +97,17 @@
     </div>
     <div id="chatsStatus" class="status"></div>
     <div id="chatRows"></div>
+    <div class="card" style="margin:8px 0 0">
+      <h3>Quick replies</h3>
+      <div class="hint">Your own snippets — fully local, tap one in WhatsApp to insert it, or type <span class="mono">!name</span> in the dock task box. <span class="mono">{name}</span> fills the chat name.</div>
+      <div id="quickRows"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="quickTitle" placeholder="Name" style="max-width:100px">
+        <input id="quickText" placeholder="Message text" style="flex:1;min-width:0">
+        <button id="quickAdd" class="btn sm primary">Add</button>
+      </div>
+      <div id="quickStatus" class="status"></div>
+    </div>
   </section>
 
   <section id="paneHistory" class="card float" hidden>

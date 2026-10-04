@@ -3,6 +3,7 @@ import { modelCaps, BOT_USES, CAP_LABELS } from '../common/models.js';
 import { DEVICE_AGENTS } from '../common/device.js';
 import { memorySentence, chatStateSentence } from '../common/chattext.js';
 import { chatIdForName } from '../common/subbots.js';
+import { validateQuick, quickId, QUICK_MAX, QUICK_TITLE_MAX, QUICK_TEXT_MAX } from '../common/quickreplies.js';
 import { applyTheme, wireThemeButton, watchSystem } from '../ui/theme.js';
 
 const $ = (id) => document.getElementById(id);
@@ -209,7 +210,7 @@ function showTab(pane, save = true) {
   const pel = $(pane);
   if (pel) pel.hidden = false;
   if (pane === 'paneBots') refreshSubbots();
-  if (pane === 'paneChats') renderChatRows().catch(() => {});
+  if (pane === 'paneChats') { renderChatRows().catch(() => {}); renderQuickManager().catch(() => {}); }
   if (pane === 'paneHistory') renderHistory().catch(() => {});
   if (save) { try { chrome.storage.local.set({ wb_ui: { tab: pane } }); } catch {} }
 }
@@ -634,6 +635,86 @@ $('chatsAllowAll')?.addEventListener('click', async () => {
     await renderChatRows();
     setStatus($('chatsStatus'), 'All chats ticked. Teach the ones missing instructions.', 'ok');
   } catch (e) { setStatus($('chatsStatus'), 'Failed: ' + e.message, 'err'); }
+});
+
+// ---------- Quick replies manager (fully local snippets) ----------
+async function renderQuickManager() {
+  const box = $('quickRows');
+  if (!box) return;
+  const s = await chrome.storage.local.get(['wb_quickreplies', 'wb_chats']);
+  const list = s.wb_quickreplies || [];
+  const chats = s.wb_chats || {};
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="hint">No quick replies yet — add your first below.</div>';
+    return;
+  }
+  for (const q of list) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginTop = '6px';
+    const t = document.createElement('strong');
+    t.textContent = q.title;
+    t.style.minWidth = '70px';
+    const x = document.createElement('span');
+    x.className = 'hint';
+    x.style.margin = '0';
+    x.style.flex = '1';
+    x.style.minWidth = '0';
+    x.style.overflow = 'hidden';
+    x.style.textOverflow = 'ellipsis';
+    x.style.whiteSpace = 'nowrap';
+    x.textContent = q.text;
+    x.title = q.text;
+    const scope = document.createElement('select');
+    scope.title = 'Which chats see this';
+    const optAll = document.createElement('option');
+    optAll.value = '*'; optAll.textContent = 'all chats';
+    scope.appendChild(optAll);
+    for (const [id, c] of Object.entries(chats)) {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = c.name || id;
+      scope.appendChild(o);
+    }
+    scope.value = (q.chats || ['*']).includes('*') ? '*' : (q.chats[0] || '*');
+    scope.onchange = async () => {
+      try {
+        const s2 = await chrome.storage.local.get(['wb_quickreplies']);
+        const all = s2.wb_quickreplies || [];
+        const hit = all.find((a) => a.id === q.id);
+        if (hit) { hit.chats = scope.value === '*' ? ['*'] : [scope.value]; await chrome.storage.local.set({ wb_quickreplies: all }); }
+      } catch (e) { setStatus($('quickStatus'), 'Failed: ' + e.message, 'err'); }
+    };
+    const del = document.createElement('button');
+    del.className = 'btn sm danger';
+    del.textContent = '×';
+    del.title = 'Delete';
+    del.onclick = async () => {
+      try {
+        const s2 = await chrome.storage.local.get(['wb_quickreplies']);
+        await chrome.storage.local.set({ wb_quickreplies: (s2.wb_quickreplies || []).filter((a) => a.id !== q.id) });
+        await renderQuickManager();
+      } catch (e) { setStatus($('quickStatus'), 'Failed: ' + e.message, 'err'); }
+    };
+    row.appendChild(t); row.appendChild(x); row.appendChild(scope); row.appendChild(del);
+    box.appendChild(row);
+  }
+}
+$('quickAdd')?.addEventListener('click', async () => {
+  try {
+    const title = $('quickTitle')?.value || '';
+    const text = $('quickText')?.value || '';
+    const err = validateQuick({ title, text });
+    if (err) { setStatus($('quickStatus'), err, 'err'); return; }
+    const s = await chrome.storage.local.get(['wb_quickreplies']);
+    const all = s.wb_quickreplies || [];
+    if (all.length >= QUICK_MAX) { setStatus($('quickStatus'), `Max ${QUICK_MAX} — delete one first.`, 'err'); return; }
+    all.push({ id: quickId(), title: title.trim().slice(0, QUICK_TITLE_MAX), text: text.trim().slice(0, QUICK_TEXT_MAX), chats: ['*'], createdAt: Date.now(), uses: 0 });
+    await chrome.storage.local.set({ wb_quickreplies: all });
+    $('quickTitle').value = ''; $('quickText').value = '';
+    setStatus($('quickStatus'), 'Added.', 'ok');
+    await renderQuickManager();
+  } catch (e) { setStatus($('quickStatus'), 'Failed: ' + e.message, 'err'); }
 });
 
 // ---------- History tab (past conversations, memory, sessions) ----------

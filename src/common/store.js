@@ -18,6 +18,7 @@ export const SKEYS = {
   subbots: 'wb_subbots',
   theme: 'wb_theme',
   taskhist: 'wb_taskhist',
+  quickreplies: 'wb_quickreplies',
 };
 
 function fillGlobal(g) {
@@ -116,6 +117,7 @@ export function migrateSnapshot(raw) {
   }
   if (!snap[SKEYS.logs] || typeof snap[SKEYS.logs] !== 'object') snap[SKEYS.logs] = {};
   if (!snap[SKEYS.subbots] || typeof snap[SKEYS.subbots] !== 'object') snap[SKEYS.subbots] = {};
+  if (!Array.isArray(snap[SKEYS.quickreplies])) snap[SKEYS.quickreplies] = [];
   return { snapshot: snap, migrated: from !== SCHEMA_VERSION, from };
 }
 
@@ -126,6 +128,7 @@ function shape(snapshot) {
     chats: snapshot[SKEYS.chats],
     logs: snapshot[SKEYS.logs],
     subbots: snapshot[SKEYS.subbots],
+    quickreplies: snapshot[SKEYS.quickreplies] || [],
   };
 }
 
@@ -155,6 +158,7 @@ export async function setStore(patch) {
   if (patch.chats) m[SKEYS.chats] = patch.chats;
   if (patch.logs) m[SKEYS.logs] = patch.logs;
   if (patch.subbots) m[SKEYS.subbots] = patch.subbots;
+  if (patch.quickreplies) m[SKEYS.quickreplies] = patch.quickreplies;
   await chrome.storage.local.set(m);
 }
 

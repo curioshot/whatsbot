@@ -24,6 +24,12 @@ test('migrateSnapshot backfills legacy store', () => {
   assert.equal(snapshot.wb_global.dailyChatCap, 100);
   assert.equal(snapshot.wb_global.dailyTotalCap, 1000);
   assert.equal(snapshot.wb_global.triggerPrefix, '');
+  assert.deepEqual(snapshot.wb_quickreplies, []);
+});
+
+test('migrateSnapshot keeps existing quick replies', () => {
+  const { snapshot } = migrateSnapshot({ wb_quickreplies: [{ id: 'q1', title: 'a' }] });
+  assert.deepEqual(snapshot.wb_quickreplies, [{ id: 'q1', title: 'a' }]);
 });
 
 test('migrateSnapshot is idempotent on current schema', () => {

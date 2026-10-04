@@ -48,6 +48,8 @@ tick the ones you want → tell each how to behave → **Save — teaches it**.
 
 - **Floating dock (in WhatsApp):** two tabs — **Reply** (AI Reply button, Build button, thinking view with quoted source, stages, session + context meter, sent receipt, and a **task box**) and **Bots** (watch/task launch, cards, history). Try `msg to krypton that i am going to his home` or `report unread`.
   Slash shortcuts: `/reply /build /auto /code /newbot /report /msg /stop /help`. The status line keeps errors until the next action; transient notes fade to idle. Setup progress (`n/5`) shows until everything is done.
+- **Quick replies:** your own snippets, kept only on this machine. Tap one in the dock
+  or type `!name` in the task box (`{name}` fills the chat name). Managed in popup → Chats tab.
 - **Suggestions (optional):** Popup → Policy → Suggestions On + Chats tab per-chat Suggest (follow global/on/off). When on and the chat has an instruction, 2-3 chips appear under the last incoming message in WhatsApp — a shimmer shows while they generate; click inserts into the box, never sends. `×` dismisses per message.
 - **Popup tabs:** Model/Brain · Device (connect + try an agent) · Chats (tick, teach, auto-learn) · History (memory, sessions, search, export) · Bots (status mirror) · Policy. The popup remembers its last tab; the Device tab collapses credentials into a summary row once connected.
 - **Auto-reply:** only in allowed chats in auto mode — and only for messages arriving after you enable (backlog never fires). Set a trigger word in Policy to answer solely messages starting with it. Daily reply budgets (per chat + total) stop a noisy chat burning spend. The dock thinking pill
