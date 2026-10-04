@@ -15,3 +15,13 @@ export function chatStateSentence(chat, globalEnabled) {
   if (String(chat.mode || 'auto') !== 'auto') return 'Manual replies only';
   return 'Answering';
 }
+
+// Chat-list marker state: which sign a chat row gets, if any.
+// 'active' = instruction set + allowed (green dot).
+// 'attention' = rule exists but paused or missing instruction (gray ring).
+// 'none' = unknown chat (no marker, list stays clean).
+export function rowMarkState(chat) {
+  if (!chat) return 'none';
+  if (String(chat.instruction || '').trim() && chat.allowed) return 'active';
+  return 'attention';
+}

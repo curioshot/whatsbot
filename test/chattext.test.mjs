@@ -1,7 +1,7 @@
 // node --test test/chattext.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { memorySentence, chatStateSentence } from '../src/common/chattext.js';
+import { memorySentence, chatStateSentence, rowMarkState } from '../src/common/chattext.js';
 
 test('memorySentence counts messages in plain words', () => {
   assert.equal(memorySentence({ contextMsgCount: 42 }, 42), 'Knows you from 42 messages');
@@ -17,4 +17,12 @@ test('chatStateSentence names the state, not the code', () => {
   assert.equal(chatStateSentence({ allowed: true, instruction: 'x' }, false), 'Ready — bot is off');
   assert.equal(chatStateSentence({ allowed: true, instruction: 'x', mode: 'manual' }, true), 'Manual replies only');
   assert.equal(chatStateSentence({ allowed: true, instruction: 'x', mode: 'auto' }, true), 'Answering');
+});
+
+// Markers stay quiet for unknown chats, dot active ones.
+test('rowMarkState picks the chat list marker', () => {
+  assert.equal(rowMarkState(null), 'none');
+  assert.equal(rowMarkState({ allowed: true, instruction: 'reply briefly' }), 'active');
+  assert.equal(rowMarkState({ allowed: true, instruction: '' }), 'attention');
+  assert.equal(rowMarkState({ allowed: false, instruction: 'reply briefly' }), 'attention');
 });

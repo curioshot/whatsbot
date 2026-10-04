@@ -158,7 +158,7 @@
     probeLayout() {
       const out = [];
       const checks = {
-        app: SEL.appRoot, chatList: SEL.chatList, searchBox: SEL.searchBox,
+        app: SEL.appRoot, chatList: SEL.chatList, chatRow: SEL.chatRow, searchBox: SEL.searchBox,
         convoBody: SEL.convoBody, header: SEL.headerTitle, composer: SEL.composer,
         sendBtn: SEL.sendBtn, sidePane: SEL.sidePane, msgRow: SEL.msgRow,
         msgText: SEL.msgText, msgMeta: SEL.msgMeta,

@@ -30,7 +30,7 @@ test('WADOM exposes every centralized helper content.js uses', () => {
 });
 
 test('probeLayout covers the critical signals', () => {
-  for (const key of ['app', 'chatList', 'searchBox', 'convoBody', 'header', 'composer', 'sendBtn', 'msgRow', 'msgText']) {
+  for (const key of ['app', 'chatList', 'chatRow', 'searchBox', 'convoBody', 'header', 'composer', 'sendBtn', 'msgRow', 'msgText']) {
     assert.ok(wadom.includes(key), `probeLayout missing signal: ${key}`);
   }
 });

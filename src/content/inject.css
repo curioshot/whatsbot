@@ -251,3 +251,19 @@
   display: grid; place-items: center; font-size: 14px; line-height: 1;
 }
 .wb-sug-x:hover { background: rgba(0, 0, 0, 0.06); color: #111; }
+/* Chat row markers live in WhatsApp rows, not the dock. */
+span[data-wbmark].wb-rowmark {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+  pointer-events: none;
+}
+span[data-wbmark].wb-rowmark.active { background: #4ade80; }
+span[data-wbmark].wb-rowmark.attention {
+  background: transparent;
+  border: 1.5px solid #8696a0;
+  box-sizing: border-box;
+}

@@ -55,7 +55,7 @@
       // per-chat case; this covers enable-while-viewing.)
       if (!was && storeCache.global.enabled) handleSnapshot(true).catch(() => {});
     }
-    if (chg['wb_chats']) storeCache.chats = chg['wb_chats'].newValue || {};
+    if (chg['wb_chats']) { storeCache.chats = chg['wb_chats'].newValue || {}; stampChatList(); }
     if (chg['wb_subbots']) { storeCache.subbots = chg['wb_subbots'].newValue || {}; refreshDockBots(); }
     if (chg['wb_providers']) storeCache.hasKey = hasKeyMap(chg['wb_providers'].newValue, (chg['wb_global']?.newValue || storeCache.global).activeProvider);
     if (chg['wb_theme']) applyDockTheme(chg['wb_theme'].newValue || 'system');
@@ -353,6 +353,81 @@
       const isGroup = window.WADOM.rowIsGroup(r);
       return { name: title.trim().slice(0, 120), unread: unread.trim(), preview: preview.slice(0, 160), kind: isGroup ? 'group' : 'chat' };
     }).filter((c) => c.name);
+  }
+
+  // ---------- chat-list markers (which chats the bot knows) ----------
+  // Classic-script twin of rowMarkState in src/common/chattext.js
+  // (content scripts can't import ES modules — keep both identical).
+  function markStateFor(rule) {
+    if (!rule) return 'none';
+    if (String(rule.instruction || '').trim() && rule.allowed) return 'active';
+    return 'attention';
+  }
+  // Same name reading as listChats, then the same id resolution the worker
+  // uses (kind-aware id, normalized + legacy fallbacks).
+  function rowChatId(row) {
+    try {
+      const t = window.WADOM.rowTitleEl(row);
+      const name = (t?.getAttribute?.('title') || t?.textContent || ((row.innerText || '').split('\n')[0] || '')).trim();
+      if (!name) return '';
+      const base = 'name:' + name.toLowerCase();
+      const group = window.WADOM.rowIsGroup(row);
+      const chats = storeCache.chats || {};
+      if (group && chats[base + '#group']) return base + '#group';
+      if (chats[base]) return base;
+      const want = base.replace(/^name:/, '').replace(/[_–—-]+/g, ' ').replace(/\s+/g, ' ');
+      for (const id of Object.keys(chats)) {
+        const b = String(id).replace(/^name:/, '').replace(/#group$/, '');
+        if (b === want && (!group || String(id).endsWith('#group'))) return id;
+      }
+      for (const id of Object.keys(chats)) {
+        if (String(id).replace(/^name:/, '').replace(/#group$/, '') === want) return id;
+      }
+    } catch {}
+    return '';
+  }
+  function stampChatList() {
+    try {
+      const pane = window.WADOM.chatListEl();
+      if (!pane) return;
+      const rows = window.WADOM.qa(pane, window.WADOM.SEL.chatRow).slice(0, 80);
+      for (const r of rows) {
+        try {
+          const state = markStateFor(storeCache.chats[rowChatId(r)]);
+          const host = window.WADOM.rowTitleEl(r) || r;
+          let mark = null;
+          try { mark = host.querySelector?.(':scope > [data-wbmark]'); } catch {}
+          if (state === 'none') { if (mark) mark.remove(); continue; }
+          if (!mark) {
+            mark = document.createElement('span');
+            mark.setAttribute('data-wbmark', '1');
+            mark.setAttribute('aria-hidden', 'true');
+            host.appendChild(mark);
+          }
+          mark.className = 'wb-rowmark ' + state;
+          mark.title = state === 'active' ? 'WhatsBot: AI active here' : 'WhatsBot: needs attention (popup → Chats)';
+        } catch {}
+      }
+    } catch {}
+  }
+  let markTimer = null;
+  let listObs = null;
+  let listPane = null;
+  function watchChatList() {
+    // Reattach when WhatsApp swaps the pane (same disease as the message
+    // observer — a stale handle watches a detached node forever).
+    try {
+      const pane = window.WADOM.chatListEl();
+      if (!pane) return;
+      if (listObs && listPane === pane && pane.isConnected) return;
+      try { listObs?.disconnect(); } catch {}
+      listObs = new MutationObserver(() => {
+        if (markTimer) return;
+        markTimer = setTimeout(() => { markTimer = null; stampChatList(); }, 500);
+      });
+      listObs.observe(pane, { childList: true, subtree: true });
+      listPane = pane;
+    } catch {}
   }
 
   // Raw read of whatever the contacts pane currently shows (no open/close).
@@ -660,6 +735,12 @@
         } else {
           ensureObserver();
         }
+        // Chat-list markers: keep the observer on the live pane, restamp on
+        // a slow tick so rule edits show without scrolling.
+        try {
+          watchChatList();
+          if (Date.now() - (watchChatList._at || 0) > 5000) { watchChatList._at = Date.now(); stampChatList(); }
+        } catch {}
         watchNewMessages._lastChat = chatId;
       } catch {}
     }, 2000);
